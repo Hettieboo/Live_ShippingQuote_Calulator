@@ -1,7 +1,4 @@
-# Live_ShippingQuote_Calulator
-# 📦 Shipping Calculator
-
-A web-based shipping quote calculator for art logistics with intelligent packing suggestions, address lookup, and PDF quote generation.
+#A web-based shipping quote calculator for art logistics with intelligent packing suggestions, address lookup, and PDF quote generation.
 
 ![Python Version](https://img.shields.io/badge/python-3.7%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
