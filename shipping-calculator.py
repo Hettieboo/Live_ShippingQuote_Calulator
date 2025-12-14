@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 
 # ======== GEOLOCATOR ========
@@ -31,7 +31,10 @@ DEMO_LOTS = pd.DataFrame({
 
 PACKING_TYPES = ['Automatic (AI)', 'Wood crate', 'Cardboard box', 'Bubble wrap', 'Custom']
 DELIVERY_TYPES = ['Front delivery', 'White Glove (ground)', 'White Glove (elevator)', 'Curbside']
-VALID_UNTIL = datetime(2025, 12, 8)
+
+# ======== DEMO validity: always 7 days ========
+VALID_UNTIL = datetime.now() + timedelta(days=7)
+DAYS_LEFT = 7
 
 # ======== LOT INFO FOR PRICING ========
 LOT_INFO = {
@@ -142,9 +145,8 @@ def calculate_shipping(lot_nums, delivery_type, packing_type):
     return total, breakdown
 
 # ======== MAIN APP ========
-days_left = max(0,(VALID_UNTIL - datetime.now()).days)
 st.title("📦 ShipQuote Pro")
-st.caption(f"Professional Shipping Quote Calculator • Demo: Lots 86-95 • Valid until {VALID_UNTIL.strftime('%b %d')} ({days_left}d)")
+st.caption(f"Professional Shipping Quote Calculator • Demo: Lots 86-95 • Valid for {DAYS_LEFT} days (expires {VALID_UNTIL.strftime('%b %d')})")
 
 with st.expander("ℹ️ Quick Guide"):
     st.write("Enter lot numbers → Type address → AI packing → Dynamic pricing → Download PDF")
@@ -207,7 +209,7 @@ with col_right:
     st.write(f"**Pack:** {packing}")
     st.write(f"**Delivery:** {delivery}")
     st.write(f"**To:** {location or 'Not specified'}")
-    st.write(f"⏰ {days_left} days remaining")
+    st.write(f"⏰ {DAYS_LEFT} days remaining")
 
     st.divider()
     if st.button("📥 Download PDF", type="primary", use_container_width=True):
