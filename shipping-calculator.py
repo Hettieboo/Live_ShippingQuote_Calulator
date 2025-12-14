@@ -155,77 +155,88 @@ days_left = max(0, (VALID_UNTIL - datetime.now()).days)
 
 st.info(f"🎨 **DEMO MODE:** Auction sale #7185 | Lots 86-95 available | Quote valid until {VALID_UNTIL.strftime('%b %d, %Y')} ({days_left} days)")
 
-# Single column layout
-st.header("📦 Lot Information")
+# Top row - Lot Info and Pricing side by side
+col_left, col_right = st.columns([1.2, 1])
 
-col_lot1, col_lot2 = st.columns([2, 1])
-with col_lot1:
-    lot_input = st.text_input(
-        "Lot Numbers (comma-separated, max 10)",
-        value="86, 89, 94",
-        placeholder="e.g., 86, 87, 88",
-        key="lot_input"
-    )
-with col_lot2:
-    descriptions, sale_no, valid_lots = lookup_lots(lot_input)
-    st.text_input("Sale Number", value=sale_no or "N/A", disabled=True)
+with col_left:
+    st.header("📦 Lot Information")
+    
+    col_lot1, col_lot2 = st.columns([2, 1])
+    with col_lot1:
+        lot_input = st.text_input(
+            "Lot Numbers",
+            value="86, 89, 94",
+            placeholder="e.g., 86, 87, 88",
+            key="lot_input"
+        )
+    with col_lot2:
+        descriptions, sale_no, valid_lots = lookup_lots(lot_input)
+        st.text_input("Sale #", value=sale_no or "N/A", disabled=True)
+    
+    st.text_area("Descriptions", value=descriptions, height=150, disabled=True)
+    
+    # AI Suggestions - compact
+    if valid_lots:
+        suggested_pack, suggestion_text = suggest_packing(valid_lots)
+        with st.expander("💡 AI Packing Suggestions"):
+            st.markdown(suggestion_text)
+    else:
+        suggested_pack = PACKING_TYPES[0]
 
-st.text_area("Descriptions", value=descriptions, height=180, disabled=True)
-
-# AI Suggestions - compact
-if valid_lots:
-    suggested_pack, suggestion_text = suggest_packing(valid_lots)
-    with st.expander("💡 AI Packing Suggestions", expanded=False):
-        st.markdown(suggestion_text)
-else:
-    suggested_pack = PACKING_TYPES[0]
+with col_right:
+    st.header("💰 Pricing")
+    
+    shipping = st.number_input("Shipping (EUR)", min_value=0.0, value=500.0, step=50.0)
+    insurance = st.number_input("Insurance (EUR)", min_value=0.0, value=100.0, step=50.0)
+    
+    total = shipping + insurance
+    st.metric("**TOTAL**", f"€{total:,.2f}")
+    
+    st.divider()
+    
+    st.subheader("📋 Summary")
+    st.caption(f"**Lots:** {len(valid_lots)}")
+    st.caption(f"**Sale:** {sale_no or 'N/A'}")
+    st.caption(f"**Packing:** {packing if 'packing' in locals() else 'TBD'}")
+    st.caption(f"**Delivery:** {delivery if 'delivery' in locals() else 'TBD'}")
+    st.caption(f"⏰ {days_left} days remaining")
 
 st.divider()
 
-# Shipment & Pricing in columns
-col1, col2, col3 = st.columns([1.5, 1.5, 1])
+# Bottom row - Shipment parameters
+st.subheader("📍 Shipment Parameters")
+
+col1, col2, col3, col4 = st.columns([2, 1.5, 1.5, 1])
 
 with col1:
-    st.subheader("📍 Shipment")
-    
     location = st.text_input(
         "Delivery Location", 
         placeholder="Start typing address...",
         key="location_input"
     )
     
-    # Address autocomplete - original working logic
+    # Address autocomplete
     if GEOPY_AVAILABLE and location and len(location) >= 3:
         suggestions = search_address(location)
         if suggestions:
             selected_address = st.selectbox(
                 "📍 Suggestions",
                 options=[""] + suggestions,
-                index=0
+                index=0,
+                label_visibility="collapsed"
             )
             if selected_address:
                 location = selected_address
-    
-    packing = st.selectbox("Packing", PACKING_TYPES, index=PACKING_TYPES.index(suggested_pack))
-    delivery = st.selectbox("Delivery", DELIVERY_TYPES)
 
 with col2:
-    st.subheader("💰 Pricing")
-    shipping = st.number_input("Shipping (EUR)", min_value=0.0, value=500.0, step=50.0)
-    insurance = st.number_input("Insurance (EUR)", min_value=0.0, value=100.0, step=50.0)
-    
-    total = shipping + insurance
-    st.metric("**TOTAL**", f"€{total:,.2f}")
+    packing = st.selectbox("Packing", PACKING_TYPES, index=PACKING_TYPES.index(suggested_pack))
 
 with col3:
-    st.subheader("📋 Summary")
-    st.caption(f"**Lots:** {len(valid_lots)}")
-    st.caption(f"**Sale:** {sale_no or 'N/A'}")
-    st.caption(f"**Packing:** {packing[:15]}...")
-    st.caption(f"**Delivery:** {delivery[:15]}...")
-    st.caption(f"**To:** {(location[:20] + '...') if len(location) > 20 else (location or 'TBD')}")
-    st.caption(f"⏰ {days_left} days left")
-    
+    delivery = st.selectbox("Delivery", DELIVERY_TYPES)
+
+with col4:
+    st.write("")  # Spacer
+    st.write("")  # Spacer
     if st.button("📥 PDF", type="primary", use_container_width=True):
         if not lot_input or not location:
             st.error("Need lots & location")
