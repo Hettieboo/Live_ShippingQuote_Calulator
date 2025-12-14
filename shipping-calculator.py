@@ -90,11 +90,13 @@ def get_geolocator():
 geolocator = get_geolocator()
 
 # ========== SESSION STATE INITIALIZATION ==========
+# Initialize demo data first
 if 'lot_df' not in st.session_state:
-    # Load demo data by default
     st.session_state.lot_df = pd.DataFrame(DEMO_DATA)
+
 if 'geocode_cache' not in st.session_state:
     st.session_state.geocode_cache = {}
+
 if 'using_demo_data' not in st.session_state:
     st.session_state.using_demo_data = True
 
@@ -490,7 +492,7 @@ def main():
                         st.info(f"📋 Sale Number: {int(first_sale)}")
             except Exception as e:
                 st.error(f"❌ Error loading file: {e}")
-        elif st.session_state.using_demo_data:
+        elif st.session_state.using_demo_data and st.session_state.lot_df is not None:
             st.success(f"✅ Using demo data ({len(st.session_state.lot_df)} sample lots)")
             st.info(f"📋 Demo Sale Number: 7185")
         
