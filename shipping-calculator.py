@@ -1,680 +1,312 @@
-"""
-SHIPQUOTE PRO - STREAMLIT APP (DEMO VERSION)
+import React, { useState, useMemo } from 'react';
+import { Package, MapPin, Clock, FileDown, Sparkles } from 'lucide-react';
 
-Installation:
-pip install streamlit pandas openpyxl geopy reportlab
+// Demo data from Excel file
+const DEMO_LOTS = [
+  { LOT: 86, SALENO: 7185, TYPESET: "JEAN-MICHEL BASQUIAT (1960-1988)\nUntitled (Skull), 1981\nAcrylic and oil stick on canvas\n207.6 x 176.8 cm" },
+  { LOT: 87, SALENO: 7185, TYPESET: "BANKSY (B. 1974)\nGirl with Balloon, 2006\nSpray paint on canvas\n150 x 150 cm" },
+  { LOT: 88, SALENO: 7185, TYPESET: "YAYOI KUSAMA (B. 1929)\nPumpkin, 2015\nAcrylic on canvas\n162 x 162 cm" },
+  { LOT: 89, SALENO: 7185, TYPESET: "DAMIEN HIRST (B. 1965)\nThe Physical Impossibility of Death, 1991\nGlass, steel, formaldehyde solution\n213 x 518 x 213 cm" },
+  { LOT: 90, SALENO: 7185, TYPESET: "JEFF KOONS (B. 1955)\nBalloon Dog (Orange), 1994-2000\nMirror-polished stainless steel\n307.3 x 363.2 x 114.3 cm" },
+  { LOT: 91, SALENO: 7185, TYPESET: "GERHARD RICHTER (B. 1932)\nAbstraktes Bild, 1986\nOil on canvas\n200 x 200 cm" },
+  { LOT: 92, SALENO: 7185, TYPESET: "TAKASHI MURAKAMI (B. 1962)\nFlower Ball (3D), 2008\nAcrylic on canvas mounted on board\nDiameter: 300 cm" },
+  { LOT: 93, SALENO: 7185, TYPESET: "ANSELM KIEFER (B. 1945)\nDie Meistersinger, 1981-1982\nOil, emulsion, straw on photograph\n280 x 380 cm" },
+  { LOT: 94, SALENO: 7185, TYPESET: "CINDY SHERMAN (B. 1954)\nUntitled Film Still #21, 1978\nGelatin silver print\n20.3 x 25.4 cm" },
+  { LOT: 95, SALENO: 7185, TYPESET: "ANDREAS GURSKY (B. 1955)\nRhein II, 1999\nC-print mounted on acrylic glass\n190 x 360 cm" }
+];
 
-Usage:
-streamlit run app.py
+const PACKING_TYPES = ['Automatic (AI)', 'Wood crate', 'Cardboard box', 'Bubble wrap', 'Custom'];
+const DELIVERY_TYPES = ['Front delivery', 'White Glove (ground)', 'White Glove (elevator)', 'Curbside'];
 
-Demo data is pre-loaded. You can also upload your own Excel file.
-"""
+const ShipQuotePro = () => {
+  const [lotInput, setLotInput] = useState('86, 89, 94');
+  const [location, setLocation] = useState('');
+  const [packing, setPacking] = useState('Automatic (AI)');
+  const [delivery, setDelivery] = useState('Front delivery');
+  const [shippingCost, setShippingCost] = useState(500);
+  const [insurance, setInsurance] = useState(100);
 
-import streamlit as st
-import pandas as pd
-from datetime import datetime
-import io
+  const validUntil = new Date('2025-12-08');
+  const daysRemaining = Math.max(0, Math.ceil((validUntil - new Date()) / (1000 * 60 * 60 * 24)));
 
-# Try to import geopy for geocoding
-try:
-    from geopy.geocoders import Nominatim
-    from geopy.exc import GeocoderTimedOut, GeocoderServiceError
-    GEOPY_AVAILABLE = True
-except ImportError:
-    GEOPY_AVAILABLE = False
-    st.warning("⚠️ Geopy not installed. Address search disabled. Run: pip install geopy")
+  // Parse lot numbers and get descriptions
+  const { lots, descriptions, saleNumbers } = useMemo(() => {
+    const nums = lotInput.split(',').map(n => n.trim()).filter(n => n);
+    const foundLots = [];
+    const descs = [];
+    const sales = new Set();
 
-# Try to import reportlab for PDF generation
-try:
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.lib.units import inch
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
-    PDF_AVAILABLE = True
-except ImportError:
-    PDF_AVAILABLE = False
+    nums.forEach(num => {
+      const lotNum = parseInt(num);
+      const lot = DEMO_LOTS.find(l => l.LOT === lotNum);
+      if (lot) {
+        foundLots.push(lotNum);
+        descs.push(`--- LOT ${lotNum} ---\n${lot.TYPESET}`);
+        sales.add(lot.SALENO);
+      } else {
+        descs.push(`--- LOT ${num} ---\n❌ Not found`);
+      }
+    });
 
-# ========== PAGE CONFIGURATION ==========
-st.set_page_config(
-    page_title="ShipQuote Pro",
-    page_icon="📦",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+    return {
+      lots: foundLots,
+      descriptions: descs.join('\n\n'),
+      saleNumbers: Array.from(sales).join(', ')
+    };
+  }, [lotInput]);
 
-# ========== DEMO DATA ==========
-DEMO_DATA = {
-    'LOT': [86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
-    'SALENO': [7185] * 10,
-    'TYPESET': [
-        "JEAN-MICHEL BASQUIAT (1960-1988)\nUntitled (Skull), 1981\nAcrylic and oil stick on canvas\n207.6 x 176.8 cm (81 3/4 x 69 5/8 in.)",
-        "BANKSY (B. 1974)\nGirl with Balloon, 2006\nSpray paint on canvas\n150 x 150 cm",
-        "YAYOI KUSAMA (B. 1929)\nPumpkin, 2015\nAcrylic on canvas\n162 x 162 cm",
-        "DAMIEN HIRST (B. 1965)\nThe Physical Impossibility of Death, 1991\nGlass, steel, formaldehyde solution\n213 x 518 x 213 cm",
-        "JEFF KOONS (B. 1955)\nBalloon Dog (Orange), 1994-2000\nMirror-polished stainless steel with transparent color coating\n307.3 x 363.2 x 114.3 cm",
-        "GERHARD RICHTER (B. 1932)\nAbstraktes Bild, 1986\nOil on canvas\n200 x 200 cm",
-        "TAKASHI MURAKAMI (B. 1962)\nFlower Ball (3D), 2008\nAcrylic on canvas mounted on board\n Diameter: 300 cm",
-        "ANSELM KIEFER (B. 1945)\nDie Meistersinger, 1981-1982\nOil, emulsion, straw on photograph mounted on canvas\n280 x 380 cm",
-        "CINDY SHERMAN (B. 1954)\nUntitled Film Still #21, 1978\nGelatin silver print\n20.3 x 25.4 cm (8 x 10 in.)",
-        "ANDREAS GURSKY (B. 1955)\nRhein II, 1999\nC-print mounted on acrylic glass\n190 x 360 cm"
-    ]
-}
+  // AI packing suggestion
+  const packingSuggestion = useMemo(() => {
+    if (lots.length === 0) return 'Enter lot numbers for AI suggestions';
+    
+    const suggestions = lots.map(lotNum => {
+      const lot = DEMO_LOTS.find(l => l.LOT === lotNum);
+      if (!lot) return null;
+      
+      const desc = lot.TYPESET.toLowerCase();
+      let suggestion = 'Automatic';
+      
+      if (desc.includes('glass') || desc.includes('steel') || desc.includes('formaldehyde')) {
+        suggestion = 'Wood crate - fragile/heavy materials';
+      } else if (desc.includes('print') || desc.includes('photograph') || desc.includes('paper')) {
+        suggestion = 'Cardboard box - works on paper';
+      } else if (desc.includes('canvas') || desc.includes('oil') || desc.includes('acrylic')) {
+        suggestion = 'Automatic - canvas painting';
+      }
+      
+      return { lot: lotNum, suggestion };
+    }).filter(Boolean);
 
-# ========== CONFIGURATION ==========
-VALID_UNTIL_DATE = datetime(2025, 12, 8)
+    return suggestions;
+  }, [lots]);
 
-DELIVERY_TYPES = [
-    'Front-delivery',
-    'White Glove (ground floor)',
-    'White Glove (with elevator)',
-    'Curbside delivery'
-]
+  const total = shippingCost + insurance;
 
-PACKING_TYPES = [
-    'Automatic (AI suggestion)',
-    'Wood crate',
-    'Cardboard box',
-    'Bubble wrap only',
-    'Custom packing'
-]
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <Package className="w-10 h-10 text-blue-600" />
+            <h1 className="text-4xl font-bold text-gray-800">ShipQuote Pro</h1>
+          </div>
+          <p className="text-gray-600">Professional Shipping Quote Calculator</p>
+          <div className="mt-4 bg-blue-50 border border-blue-200 rounded p-3 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-blue-600" />
+            <span className="text-sm text-blue-800">DEMO MODE: Using auction sale #7185 with 10 sample lots (86-95)</span>
+          </div>
+        </div>
 
-# Initialize geocoder
-@st.cache_resource
-def get_geolocator():
-    if GEOPY_AVAILABLE:
-        return Nominatim(user_agent="shipquote_pro_v1")
-    return None
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Left Column */}
+          <div className="space-y-6">
+            {/* Lot Information */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Package className="w-6 h-6" />
+                Lot Information
+              </h2>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Lot Numbers (comma-separated, max 10)
+                </label>
+                <input
+                  type="text"
+                  value={lotInput}
+                  onChange={(e) => setLotInput(e.target.value)}
+                  placeholder="e.g., 86, 87, 88"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">Try: 86, 89, 94</p>
+              </div>
 
-geolocator = get_geolocator()
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Sale Number</label>
+                <input
+                  type="text"
+                  value={saleNumbers || 'N/A'}
+                  disabled
+                  className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600"
+                />
+              </div>
 
-# ========== SESSION STATE INITIALIZATION ==========
-# Initialize demo data first
-if 'lot_df' not in st.session_state:
-    st.session_state.lot_df = pd.DataFrame(DEMO_DATA)
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Descriptions</label>
+                <textarea
+                  value={descriptions}
+                  disabled
+                  rows={10}
+                  className="w-full px-4 py-2 bg-gray-100 border border-gray-300 rounded-lg text-gray-600 text-sm font-mono"
+                />
+              </div>
 
-if 'geocode_cache' not in st.session_state:
-    st.session_state.geocode_cache = {}
+              {/* AI Suggestions */}
+              {packingSuggestion.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h3 className="font-semibold text-amber-900 mb-2 flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    AI Packing Suggestions
+                  </h3>
+                  {packingSuggestion.map(({ lot, suggestion }) => (
+                    <div key={lot} className="text-sm text-amber-800 mb-1">
+                      <strong>Lot {lot}:</strong> {suggestion}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-if 'using_demo_data' not in st.session_state:
-    st.session_state.using_demo_data = True
+            {/* Shipment Parameters */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <MapPin className="w-6 h-6" />
+                Shipment Parameters
+              </h2>
 
-# ========== HELPER FUNCTIONS ==========
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Location</label>
+                  <input
+                    type="text"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="123 Main St, New York, NY"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
-def calculate_days_remaining():
-    """Calculate days until quote expires"""
-    today = datetime.now()
-    diff = (VALID_UNTIL_DATE - today).days
-    return max(0, diff)
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Packing Type</label>
+                  <select
+                    value={packing}
+                    onChange={(e) => setPacking(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    {PACKING_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
 
-def search_address(query):
-    """Search for addresses using Geopy"""
-    if not GEOPY_AVAILABLE or not geolocator:
-        return []
-    
-    if not query or len(query) < 3:
-        return []
-    
-    # Check cache first
-    if query in st.session_state.geocode_cache:
-        return st.session_state.geocode_cache[query]
-    
-    try:
-        locations = geolocator.geocode(query, exactly_one=False, limit=5, timeout=3)
-        
-        if locations:
-            results = [loc.address for loc in locations]
-            st.session_state.geocode_cache[query] = results
-            return results
-        return []
-    except (GeocoderTimedOut, GeocoderServiceError):
-        return []
-    except Exception as e:
-        st.error(f"Geocoding error: {e}")
-        return []
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Delivery Type</label>
+                  <select
+                    value={delivery}
+                    onChange={(e) => setDelivery(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    {DELIVERY_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
 
-def format_address(address_text):
-    """Format and validate address"""
-    if not address_text:
-        return "Not specified"
-    
-    if not GEOPY_AVAILABLE or not geolocator:
-        return address_text
-    
-    try:
-        location = geolocator.geocode(address_text, timeout=3)
-        if location:
-            return location.address
-        return address_text
-    except:
-        return address_text
+          {/* Right Column */}
+          <div className="space-y-6">
+            {/* Pricing */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">💰 Pricing</h2>
 
-def lookup_multiple_lots(lot_numbers_text):
-    """Look up multiple lots from comma-separated input"""
-    if st.session_state.lot_df is None:
-        return "⚠️ Please upload Excel file first", ""
-    
-    if not lot_numbers_text or lot_numbers_text.strip() == "":
-        return "", ""
-    
-    # Parse comma-separated lot numbers
-    lot_numbers = [num.strip() for num in lot_numbers_text.split(',') if num.strip()]
-    
-    if len(lot_numbers) > 10:
-        return "❌ Maximum 10 lots allowed per quote", ""
-    
-    all_descriptions = []
-    sale_numbers = set()
-    
-    for lot_num_str in lot_numbers:
-        try:
-            lot_num = int(float(lot_num_str))
-            
-            if lot_num < 0:
-                all_descriptions.append(f"--- LOT {lot_num_str} ---\n❌ Invalid: negative number\n")
-                continue
-            
-            lot_row = st.session_state.lot_df[st.session_state.lot_df['LOT'] == lot_num]
-            
-            if not lot_row.empty:
-                description = str(lot_row.iloc[0]['TYPESET'])
-                sale_no = str(int(lot_row.iloc[0]['SALENO'])) if 'SALENO' in st.session_state.lot_df.columns else "N/A"
-                
-                all_descriptions.append(f"--- LOT {lot_num} ---\n{description}\n")
-                sale_numbers.add(sale_no)
-            else:
-                all_descriptions.append(f"--- LOT {lot_num} ---\n❌ Not found in database\n")
-        except ValueError:
-            all_descriptions.append(f"--- {lot_num_str} ---\n❌ Invalid: not a number\n")
-        except Exception as e:
-            all_descriptions.append(f"--- {lot_num_str} ---\n❌ Error: {str(e)}\n")
-    
-    combined_description = "\n".join(all_descriptions)
-    combined_sale = ", ".join(sorted(sale_numbers)) if sale_numbers else ""
-    
-    return combined_description, combined_sale
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Shipping Cost (EUR)</label>
+                  <input
+                    type="number"
+                    value={shippingCost}
+                    onChange={(e) => setShippingCost(Number(e.target.value))}
+                    min="0"
+                    step="10"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
 
-def suggest_packing_type(description):
-    """Suggest packing type based on artwork description"""
-    if not description or description.strip() == "":
-        return "Automatic (AI suggestion)", "Automatic - let AI assess best option"
-    
-    description_lower = description.lower()
-    
-    # Check for fragile items
-    fragile_keywords = ['glass', 'ceramic', 'porcelain', 'fragile', 'caisson lumineux',
-                        'light box', 'neon', 'installation', 'sculpture', 'bronze', 'marble',
-                        'formaldehyde', 'steel']
-    
-    # Check for large/heavy items
-    heavy_keywords = ['sculpture', 'bronze', 'marble', 'stone', 'metal', 'installation', 'steel', 'stainless']
-    
-    # Check for delicate works on paper
-    paper_keywords = ['paper', 'watercolor', 'gouache', 'drawing', 'print', 'etching',
-                      'lithograph', 'photograph', 'photo', 'c-print', 'tirage', 'gelatin silver']
-    
-    # Check for paintings
-    painting_keywords = ['canvas', 'oil', 'acrylic', 'painting', 'huile', 'toile', 'oil stick']
-    
-    # Decision logic
-    if any(keyword in description_lower for keyword in fragile_keywords):
-        if any(keyword in description_lower for keyword in heavy_keywords):
-            return "Wood crate", "Wood crate - fragile/heavy (glass, steel, or sculpture)"
-        else:
-            return "Wood crate", "Wood crate - fragile items (glass or delicate materials)"
-    
-    elif any(keyword in description_lower for keyword in paper_keywords):
-        return "Cardboard box", "Cardboard box - works on paper (photograph, print, or paper-based)"
-    
-    elif any(keyword in description_lower for keyword in painting_keywords):
-        return "Automatic (AI suggestion)", "Automatic - canvas paintings (standard protection)"
-    
-    elif any(keyword in description_lower for keyword in heavy_keywords):
-        return "Wood crate", "Wood crate - heavy sculptures or installations"
-    
-    else:
-        return "Automatic (AI suggestion)", "Automatic - let AI assess best option"
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Insurance (EUR)</label>
+                  <input
+                    type="number"
+                    value={insurance}
+                    onChange={(e) => setInsurance(Number(e.target.value))}
+                    min="0"
+                    step="10"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
 
-def suggest_packing_for_multiple_lots(lot_numbers_text):
-    """Analyze each lot and provide individual packing suggestions"""
-    if st.session_state.lot_df is None or not lot_numbers_text or lot_numbers_text.strip() == "":
-        return "Automatic (AI suggestion)", "ℹ️ Enter lot numbers to get intelligent packing suggestions"
-    
-    lot_numbers = [num.strip() for num in lot_numbers_text.split(',') if num.strip()]
-    
-    if len(lot_numbers) == 0:
-        return "Automatic (AI suggestion)", "ℹ️ Enter lot numbers to get intelligent packing suggestions"
-    
-    suggestions_list = []
-    packing_recommendations = {}
-    
-    for lot_num_str in lot_numbers:
-        try:
-            lot_num = int(float(lot_num_str))
-            lot_row = st.session_state.lot_df[st.session_state.lot_df['LOT'] == lot_num]
-            
-            if not lot_row.empty:
-                description = str(lot_row.iloc[0]['TYPESET'])
-                suggested_packing, reason = suggest_packing_type(description)
-                
-                suggestions_list.append(f"**Lot {lot_num}:** {reason}")
-                
-                if suggested_packing in packing_recommendations:
-                    packing_recommendations[suggested_packing] += 1
-                else:
-                    packing_recommendations[suggested_packing] = 1
-            else:
-                suggestions_list.append(f"**Lot {lot_num}:** Not found in database")
-        except:
-            suggestions_list.append(f"**{lot_num_str}:** Invalid lot number")
-    
-    # Determine overall recommendation
-    if packing_recommendations:
-        if len(packing_recommendations) == 1:
-            overall_packing = list(packing_recommendations.keys())[0]
-            overall_message = f"\n\n✅ **Overall Recommendation:** {overall_packing} (all lots require same packing)"
-        else:
-            if "Wood crate" in packing_recommendations:
-                overall_packing = "Wood crate"
-                overall_message = f"\n\n⚠️ **Overall Recommendation:** {overall_packing} (most protective option for mixed lot types)"
-            elif "Cardboard box" in packing_recommendations:
-                overall_packing = "Cardboard box"
-                overall_message = f"\n\n💡 **Overall Recommendation:** {overall_packing} (suitable for most items)"
-            else:
-                overall_packing = "Automatic (AI suggestion)"
-                overall_message = f"\n\n💡 **Overall Recommendation:** {overall_packing} (let AI assess)"
-    else:
-        overall_packing = "Automatic (AI suggestion)"
-        overall_message = ""
-    
-    full_suggestion = "💡 **Packing Suggestions by Lot:**\n\n" + "\n".join(suggestions_list) + overall_message
-    
-    return overall_packing, full_suggestion
+              <div className="bg-blue-50 border-2 border-blue-500 rounded-lg p-4">
+                <div className="text-sm text-gray-600 mb-1">TOTAL WITH INSURANCE</div>
+                <div className="text-4xl font-bold text-blue-600">€{total.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+              </div>
+            </div>
 
-def generate_pdf_quote(lot_numbers, description, sale_no, location, packing, delivery, shipping_cost, insurance):
-    """Generate a PDF quote document"""
-    
-    if not PDF_AVAILABLE:
-        return None
-    
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
-    
-    elements = []
-    
-    # Define styles
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=24,
-        textColor=colors.HexColor('#1e40af'),
-        spaceAfter=30,
-        alignment=TA_CENTER
-    )
-    
-    heading_style = ParagraphStyle(
-        'CustomHeading',
-        parent=styles['Heading2'],
-        fontSize=14,
-        textColor=colors.HexColor('#1e40af'),
-        spaceAfter=12,
-        spaceBefore=12
-    )
-    
-    # Title
-    elements.append(Paragraph("📦 SHIPQUOTE PRO - SHIPPING QUOTE", title_style))
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Quote Info
-    quote_date = datetime.now().strftime('%B %d, %Y')
-    valid_until = VALID_UNTIL_DATE.strftime('%B %d, %Y')
-    
-    info_data = [
-        ['Quote Date:', quote_date],
-        ['Valid Until:', valid_until],
-        ['Sale Number:', sale_no if sale_no else 'N/A']
-    ]
-    
-    info_table = Table(info_data, colWidths=[2*inch, 4*inch])
-    info_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#4b5563')),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(info_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Lot Information
-    elements.append(Paragraph("LOT INFORMATION", heading_style))
-    lot_count = len([n for n in lot_numbers.split(',') if n.strip()]) if lot_numbers else 0
-    elements.append(Paragraph(f"<b>Number of Lots:</b> {lot_count}", styles['Normal']))
-    elements.append(Paragraph(f"<b>Lot Numbers:</b> {lot_numbers}", styles['Normal']))
-    elements.append(Spacer(1, 0.1*inch))
-    
-    # Description (truncated for PDF)
-    desc_text = description[:800] + "..." if len(description) > 800 else description
-    desc_clean = desc_text.replace('\n', '<br/>')
-    elements.append(Paragraph(f"<b>Description:</b><br/>{desc_clean}", styles['Normal']))
-    elements.append(Spacer(1, 0.2*inch))
-    
-    # Shipment Details
-    elements.append(Paragraph("SHIPMENT DETAILS", heading_style))
-    shipment_data = [
-        ['Delivery Location:', location if location else 'Not specified'],
-        ['Packing Type:', packing if packing else 'Not selected'],
-        ['Delivery Type:', delivery if delivery else 'Not selected']
-    ]
-    
-    shipment_table = Table(shipment_data, colWidths=[2*inch, 4*inch])
-    shipment_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#4b5563')),
-        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(shipment_table)
-    elements.append(Spacer(1, 0.3*inch))
-    
-    # Pricing
-    elements.append(Paragraph("PRICING", heading_style))
-    
-    cost_val = float(shipping_cost) if shipping_cost else 0
-    insurance_val = float(insurance) if insurance else 0
-    total_val = cost_val + insurance_val
-    
-    pricing_data = [
-        ['Shipping Cost:', f'€{cost_val:,.2f}'],
-        ['Insurance:', f'€{insurance_val:,.2f}'],
-        ['', ''],
-        ['TOTAL:', f'€{total_val:,.2f}']
-    ]
-    
-    pricing_table = Table(pricing_data, colWidths=[4*inch, 2*inch])
-    pricing_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, 1), 'Helvetica-Bold'),
-        ('FONTNAME', (1, 0), (1, 1), 'Helvetica'),
-        ('FONTNAME', (0, 3), (-1, 3), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, -1), 11),
-        ('FONTSIZE', (0, 3), (-1, 3), 14),
-        ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#4b5563')),
-        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
-        ('LINEABOVE', (0, 3), (-1, 3), 2, colors.HexColor('#1e40af')),
-        ('TEXTCOLOR', (0, 3), (-1, 3), colors.HexColor('#1e40af')),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-    ]))
-    elements.append(pricing_table)
-    elements.append(Spacer(1, 0.4*inch))
-    
-    # Footer
-    footer_text = f"""
-    <para align=center>
-    <font size=8 color="#6b7280">
-    This quote is valid until {valid_until}.<br/>
-    Generated by ShipQuote Pro<br/>
-    Art moderne et contemporain
-    </font>
-    </para>
-    """
-    elements.append(Paragraph(footer_text, styles['Normal']))
-    
-    # Build PDF
-    doc.build(elements)
-    
-    pdf_data = buffer.getvalue()
-    buffer.close()
-    
-    return pdf_data
+            {/* Quote Summary */}
+            <div className="bg-white rounded-lg shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4">📋 Quote Summary</h2>
 
-# ========== MAIN APP ==========
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Number of Lots:</span>
+                  <span className="font-semibold">{lots.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Sale Number:</span>
+                  <span className="font-semibold">{saleNumbers || 'N/A'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Packing:</span>
+                  <span className="font-semibold">{packing}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Delivery Type:</span>
+                  <span className="font-semibold">{delivery}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Destination:</span>
+                  <span className="font-semibold">{location || 'Not specified'}</span>
+                </div>
+              </div>
 
-def main():
-    # Header
-    st.title("📦 ShipQuote Pro")
-    st.subheader("Professional Shipping Quote Calculator")
-    
-    # Demo banner
-    if st.session_state.using_demo_data:
-        st.info("🎨 **DEMO MODE:** Using sample auction data. Upload your own Excel file to customize.")
-    
-    # Sidebar - File Upload
-    with st.sidebar:
-        st.header("📁 Data Upload")
-        
-        with st.expander("📋 Required Excel Format", expanded=False):
-            st.markdown("""
-            **Required Columns:**
-            - `LOT` (integer): Lot number
-            - `TYPESET` (text): Item description
-            - `SALENO` (integer): Sale/auction number
-            
-            **Example:**
-            | LOT | SALENO | TYPESET |
-            |-----|--------|---------|
-            | 86  | 7185   | JEAN-MICHEL BASQUIAT... |
-            | 87  | 7185   | BANKSY... |
-            
-            The app will auto-populate descriptions when you enter lot numbers.
-            """)
-        
-        uploaded_file = st.file_uploader(
-            "Upload Your Excel File",
-            type=['xlsx', 'xls'],
-            help="Upload your lot database Excel file with LOT, SALENO, and TYPESET columns"
-        )
-        
-        if uploaded_file is not None:
-            try:
-                df = pd.read_excel(uploaded_file)
-                
-                # Validate required columns
-                required_columns = ['LOT', 'TYPESET']
-                missing_columns = [col for col in required_columns if col not in df.columns]
-                
-                if missing_columns:
-                    st.error(f"❌ Missing required columns: {', '.join(missing_columns)}")
-                    st.info("Please ensure your Excel file contains: LOT, TYPESET, and optionally SALENO")
-                else:
-                    st.session_state.lot_df = df
-                    st.session_state.using_demo_data = False
-                    st.session_state.geocode_cache = {}  # Clear cache on new upload
-                    st.success(f"✅ Loaded {len(df)} lots from your file")
-                    
-                    # Display sale number if available
-                    if 'SALENO' in df.columns:
-                        first_sale = df['SALENO'].iloc[0]
-                        st.info(f"📋 Sale Number: {int(first_sale)}")
-            except Exception as e:
-                st.error(f"❌ Error loading file: {e}")
-        elif st.session_state.using_demo_data and st.session_state.lot_df is not None:
-            st.success(f"✅ Using demo data ({len(st.session_state.lot_df)} sample lots)")
-            st.info(f"📋 Demo Sale Number: 7185")
-        
-        st.markdown("---")
-        
-        # Quote validity countdown
-        days = calculate_days_remaining()
-        st.markdown("### ⏰ Quote Validity")
-        st.markdown(f"**Valid until:** {VALID_UNTIL_DATE.strftime('%B %d, %Y')}")
-        st.markdown(f"**Days remaining:** :red[{days} days]")
-        
-        if not PDF_AVAILABLE:
-            st.warning("⚠️ PDF download unavailable\nInstall reportlab to enable")
-        
-        if not GEOPY_AVAILABLE:
-            st.warning("⚠️ Address search unavailable\nInstall geopy to enable")
-    
-    # Main content area
-    col1, col2 = st.columns([1, 1])
-    
-    with col1:
-        st.header("📦 Lot Information")
-        
-        # Show example lot numbers for demo
-        demo_hint = "Try: 86, 89, 94 (or any from 86-95)" if st.session_state.using_demo_data else "Enter lot numbers from your uploaded file"
-        
-        lot_numbers = st.text_area(
-            "Lot Numbers (up to 10)",
-            placeholder=demo_hint,
-            help="Enter up to 10 lot numbers separated by commas. Descriptions will auto-populate.",
-            height=100
-        )
-        
-        # Auto-lookup when lot numbers change
-        if lot_numbers:
-            description, sale_no = lookup_multiple_lots(lot_numbers)
-            
-            st.text_input("Sale Number(s)", value=sale_no, disabled=True)
-            
-            st.text_area(
-                "Description(s)",
-                value=description,
-                height=300,
-                disabled=True
-            )
-            
-            # Get packing suggestions
-            suggested_packing, suggestion_text = suggest_packing_for_multiple_lots(lot_numbers)
-            
-            with st.expander("💡 AI Packing Suggestions", expanded=True):
-                st.markdown(suggestion_text)
-        else:
-            sale_no = ""
-            description = ""
-            suggested_packing = PACKING_TYPES[0]
-        
-        st.markdown("---")
-        st.header("📍 Shipment Parameters")
-        
-        location = st.text_input(
-            "Delivery Location",
-            placeholder="Start typing address (e.g., '123 Main St, New York' or 'Louvre Museum, Paris')",
-            help="Type at least 3 characters to see suggestions (requires geopy)"
-        )
-        
-        # Address suggestions
-        if GEOPY_AVAILABLE and location and len(location) >= 3:
-            suggestions = search_address(location)
-            if suggestions:
-                selected_address = st.selectbox(
-                    "📍 Address Suggestions (select one)",
-                    options=[""] + suggestions,
-                    index=0
-                )
-                if selected_address:
-                    location = selected_address
-        
-        packing = st.selectbox(
-            "Type of Packing",
-            options=PACKING_TYPES,
-            index=PACKING_TYPES.index(suggested_packing) if lot_numbers else 0
-        )
-        
-        delivery = st.selectbox(
-            "Type of Delivery",
-            options=DELIVERY_TYPES,
-            index=0
-        )
-    
-    with col2:
-        st.header("💰 Pricing")
-        
-        shipping_cost = st.number_input(
-            "Shipping Cost (EUR)",
-            min_value=0.0,
-            value=0.0,
-            step=10.0,
-            format="%.2f"
-        )
-        
-        insurance = st.number_input(
-            "Insurance (EUR)",
-            min_value=0.0,
-            value=0.0,
-            step=10.0,
-            format="%.2f"
-        )
-        
-        total = shipping_cost + insurance
-        
-        st.metric(
-            label="💵 TOTAL WITH INSURANCE (EUR)",
-            value=f"€{total:,.2f}",
-            delta=None
-        )
-        
-        st.markdown("---")
-        st.header("📋 Quote Summary")
-        
-        # Calculate lot count
-        lot_count = len([n for n in lot_numbers.split(',') if n.strip()]) if lot_numbers else 0
-        
-        formatted_location = format_address(location) if location else "Not specified"
-        
-        st.markdown(f"""
-        **Number of Lots:** {lot_count}  
-        **Sale Number:** {sale_no if sale_no else 'N/A'}  
-        **Packing:** {packing if packing else 'Not selected'}  
-        **Delivery Type:** {delivery if delivery else 'Not selected'}  
-        **Destination:** {formatted_location}
-        
-        ---
-        
-        ⏰ **Quote valid until:** {VALID_UNTIL_DATE.strftime('%B %d, %Y')}  
-        **Days remaining:** {days} days
-        """)
-        
-        st.markdown("---")
-        
-        # PDF Download
-        if PDF_AVAILABLE:
-            if st.button("📥 Download Quote as PDF", type="primary", use_container_width=True):
-                if not lot_numbers or not location:
-                    st.error("Please fill in lot numbers and location before downloading")
-                else:
-                    try:
-                        pdf_data = generate_pdf_quote(
-                            lot_numbers, description, sale_no, location,
-                            packing, delivery, shipping_cost, insurance
-                        )
-                        
-                        if pdf_data:
-                            filename = f"ShipQuote_Pro_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-                            st.download_button(
-                                label="💾 Download PDF",
-                                data=pdf_data,
-                                file_name=filename,
-                                mime="application/pdf",
-                                use_container_width=True
-                            )
-                            st.success("✅ PDF generated successfully!")
-                        else:
-                            st.error("Error generating PDF")
-                    except Exception as e:
-                        st.error(f"Error creating PDF: {str(e)}")
-        else:
-            st.info("📥 Install reportlab to enable PDF downloads")
-    
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-    ### 📋 How to use:
-    1. **Upload your Excel file** in the sidebar (or use demo data)
-    2. **Enter lot numbers** (comma-separated for multiple, e.g., "86, 87, 88") - up to 10 lots per quote
-    3. **Descriptions auto-populate** from your Excel file
-    4. **Search for delivery address** - suggestions appear as you type (requires geopy)
-    5. **Select packing and delivery options** (AI suggestions provided)
-    6. **Enter pricing** to see total and summary
-    7. **Download PDF** of your complete quote (requires reportlab)
-    
-    Made with Streamlit | Powered by OpenStreetMap
-    """)
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
+                  <Clock className="w-4 h-4" />
+                  <span>Quote valid until: {validUntil.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                </div>
+                <div className="text-sm font-semibold text-red-600">
+                  Days remaining: {daysRemaining} days
+                </div>
+              </div>
 
-if __name__ == "__main__":
-    main()
+              <button
+                onClick={() => alert('PDF generation would require backend integration')}
+                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+              >
+                <FileDown className="w-5 h-5" />
+                Download Quote as PDF
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-6 bg-white rounded-lg shadow-lg p-6">
+          <h3 className="font-bold text-gray-800 mb-3">📋 How to use:</h3>
+          <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+            <li><strong>Enter lot numbers</strong> (comma-separated, e.g., "86, 87, 88") - max 10 lots</li>
+            <li><strong>Descriptions auto-populate</strong> from the demo database</li>
+            <li><strong>AI suggests packing</strong> based on artwork type</li>
+            <li><strong>Enter delivery address</strong> and select options</li>
+            <li><strong>Set pricing</strong> to see total with insurance</li>
+            <li><strong>Download PDF quote</strong> (requires backend)</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ShipQuotePro;
