@@ -7,6 +7,15 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
+# Try to import geopy for address autocomplete
+try:
+    from geopy.geocoders import Nominatim
+    from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+    import time
+    GEOPY_AVAILABLE = True
+except ImportError:
+    GEOPY_AVAILABLE = False
+
 # ========== DEMO DATA ==========
 DEMO_LOTS = pd.DataFrame({
     'LOT': [86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
@@ -31,6 +40,19 @@ VALID_UNTIL = datetime(2025, 12, 8)
 
 # ========== CONFIG ==========
 st.set_page_config(page_title="ShipQuote Pro", page_icon="📦", layout="wide")
+
+# Initialize session state
+if 'geocode_cache' not in st.session_state:
+    st.session_state.geocode_cache = {}
+
+# Initialize geocoder
+@st.cache_resource
+def get_geolocator():
+    if GEOPY_AVAILABLE:
+        return Nominatim(user_agent="shipquote_pro_demo")
+    return None
+
+geolocator = get_geolocator()
 
 # ========== FUNCTIONS ==========
 def lookup_lots(lot_input):
