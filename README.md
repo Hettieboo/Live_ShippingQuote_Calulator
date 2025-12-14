@@ -1,248 +1,249 @@
-#A web-based shipping quote calculator for art logistics with intelligent packing suggestions, address lookup, and PDF quote generation.
+# 📦 ShipQuote Pro
 
-![Python Version](https://img.shields.io/badge/python-3.7%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Gradio](https://img.shields.io/badge/gradio-latest-orange)
+**Professional shipping quote calculator for fine art and high-value logistics**
 
-## 🎯 Features
-
-- **Multi-lot Support**: Calculate quotes for up to 10 lots simultaneously
-- **Excel Integration**: Auto-populate lot descriptions from Excel database
-- **Smart Address Lookup**: Real-time address suggestions using OpenStreetMap
-- **Intelligent Packing Suggestions**: Automatic packing recommendations based on artwork type
-- **PDF Export**: Generate professional PDF quotes (optional)
-- **Live Calculations**: Real-time pricing updates
-- **Quote Expiration Tracking**: Built-in countdown for quote validity
-
-## 🚀 Quick Start
-
-### Google Colab (Recommended for Testing)
-
-1. Open the notebook in Google Colab
-2. Install dependencies:
-```python
-!pip install reportlab
-```
-3. Run all cells
-4. Upload your Excel file when prompted
-5. Access the web interface via the generated link
-
-### Local Installation
-
-1. **Clone the repository**
-```bash
-git clone https://github.com/yourusername/convelio-calculator.git
-cd convelio-calculator
-```
-
-2. **Install dependencies**
-```bash
-pip install gradio pandas openpyxl geopy reportlab
-```
-
-3. **Prepare your data**
-   - Place your Excel file in the project directory
-   - Update the `EXCEL_FILE` variable in the script with your filename
-
-4. **Run the application**
-```bash
-python shipping_calculator.py
-```
-
-5. **Access the interface**
-   - Local: `http://localhost:7860`
-   - Public URL will be displayed in the console
-
-## 📋 Requirements
-
-### Required Dependencies
-```
-gradio
-pandas
-openpyxl
-geopy
-```
-
-### Optional Dependencies
-```
-reportlab  # For PDF generation
-```
-
-## 📊 Excel File Format
-
-Your Excel file should contain the following columns:
-
-| Column | Description | Required |
-|--------|-------------|----------|
-| `LOT` | Lot number (integer) | ✅ |
-| `TYPESET` | Artwork description | ✅ |
-| `SALENO` | Sale number | ✅ |
-| Additional columns | Dimensions, materials, etc. | ⚪ |
-
-**Example:**
-```
-LOT  | TYPESET                        | SALENO
------|--------------------------------|--------
-86   | Oil on canvas, 100x80cm...     | 2302
-87   | Bronze sculpture, 50cm...      | 2302
-```
-
-## 🎨 Usage
-
-### Basic Workflow
-
-1. **Enter Lot Numbers**
-   - Single lot: `86`
-   - Multiple lots: `86, 87, 88` (comma-separated, max 10)
-
-2. **Review Auto-Populated Data**
-   - Descriptions load automatically from Excel
-   - Sale numbers are displayed
-
-3. **Set Delivery Location**
-   - Start typing an address
-   - Select from auto-suggested addresses
-   - Or enter manually
-
-4. **Choose Options**
-   - Packing type (or use automatic suggestions)
-   - Delivery type (Front-delivery, White Glove, etc.)
-
-5. **Enter Pricing**
-   - Convelio offer amount
-   - Insurance amount
-   - Total calculates automatically
-
-6. **Generate Quote**
-   - Review the offer recap
-   - Download PDF (if reportlab installed)
-
-### Packing Type Options
-
-| Option | Best For |
-|--------|----------|
-| **Automatic** | Let Convelio assess (default) |
-| **Wood Crate** | Fragile items, sculptures, glass |
-| **Cardboard Box** | Works on paper, prints, photos |
-| **Bubble Wrap** | Small, sturdy items |
-| **Custom Packing** | Special requirements |
-
-### Delivery Type Options
-
-- **Front-delivery**: Standard delivery to front door
-- **White Glove (ground floor)**: Professional installation, ground level
-- **White Glove (with elevator)**: Professional installation, any floor
-- **Curbside delivery**: Delivery to curb only
-
-## 🤖 Intelligent Features
-
-### Automatic Packing Suggestions
-
-The calculator analyzes artwork descriptions and suggests optimal packing:
-
-- **Glass/Ceramic/Porcelain** → Wood crate
-- **Sculptures/Bronze/Marble** → Wood crate
-- **Photographs/Prints/Drawings** → Cardboard box
-- **Canvas Paintings** → Automatic assessment
-- **Mixed lots** → Most protective option
-
-### Address Validation
-
-- Real-time geocoding via OpenStreetMap
-- Automatic address formatting
-- Suggestion caching for performance
-
-## ⚙️ Configuration
-
-Edit these constants in the script:
-
-```python
-# Quote expiration date
-VALID_UNTIL_DATE = datetime(2025, 12, 8)
-
-# Excel filename (for local use)
-EXCEL_FILE = "your_file.xlsx"
-```
-
-## 📄 PDF Generation
-
-When reportlab is installed, quotes can be exported as professional PDFs including:
-
-- Quote date and validity period
-- Complete lot information
-- Shipment details (location, packing, delivery)
-- Itemized pricing breakdown
-- Formatted for printing or email
-
-## 🔧 Troubleshooting
-
-### Excel File Not Loading
-- Verify file is in the correct directory
-- Check file permissions
-- Ensure column names match expected format
-
-### Address Lookup Not Working
-- Check internet connection
-- Verify geopy is installed correctly
-- Clear geocode cache if stale
-
-### PDF Download Unavailable
-- Install reportlab: `pip install reportlab`
-- Restart the application
-
-### Application Won't Start
-```bash
-# Check Python version (3.7+ required)
-python --version
-
-# Reinstall dependencies
-pip install --upgrade gradio pandas openpyxl geopy reportlab
-```
-
-## 🌐 Deployment
-
-### Local Network Access
-```python
-demo.launch(server_name="0.0.0.0", server_port=7860)
-```
-
-### Share Publicly
-```python
-demo.launch(share=True)  # Generates temporary public URL
-```
-
-### Production Deployment
-- Deploy to Hugging Face Spaces
-- Use Docker container
-- Deploy to cloud platform (AWS, GCP, Azure)
-
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 🙏 Acknowledgments
-
-- Built with [Gradio](https://gradio.app/)
-- Address lookup powered by [OpenStreetMap](https://www.openstreetmap.org/) via [geopy](https://geopy.readthedocs.io/)
-- PDF generation using [ReportLab](https://www.reportlab.com/)
-
-## 📞 Support
-
-For issues or questions:
-- Open an issue on GitHub
-- Check existing issues for solutions
-- Review troubleshooting section
+A Streamlit web application that generates intelligent shipping quotes for artwork and valuable items with AI-powered packing recommendations, distance-based pricing, and professional PDF quote generation.
 
 ---
 
-**Made for Art Logistics** | Powered by Gradio & OpenStreetMap
+## ✨ Features
+
+- **🤖 AI Packing Recommendations** - Automatically suggests optimal packing based on artwork materials (canvas, glass, metal, photographs)
+- **📍 Distance-Based Pricing** - Calculates shipping costs based on distance from Paris using geocoding
+- **💰 Dynamic Pricing Model** - Factors in weight, materials, delivery type, and packing requirements
+- **📄 Professional PDF Quotes** - Generates branded PDF documents with detailed breakdowns
+- **💱 Multi-Currency Support** - Quote in EUR, USD, or GBP with live conversion
+- **👔 Admin Mode** - Toggle admin view to add profit margins
+- **🎨 Demo Mode** - Pre-loaded with 10 famous artwork lots for testing
+
+---
+
+## 🚀 Quick Start
+
+### Installation
+
+```bash
+# Clone the repository
+git clone <your-repo-url>
+cd shipquote-pro
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the app
+streamlit run shipping-calculator.py
+```
+
+### Requirements
+
+Create a `requirements.txt` file:
+
+```
+streamlit
+geopy
+reportlab
+```
+
+---
+
+## 📋 How It Works
+
+### 1. **Lot Selection**
+Enter comma-separated lot numbers (e.g., `86, 89, 94`). The demo includes 10 pre-configured lots:
+
+| Lot | Weight | Material | Example Artwork |
+|-----|--------|----------|-----------------|
+| 86  | Heavy  | Canvas   | Basquiat painting |
+| 89  | Heavy  | Glass/Steel | Hirst sculpture |
+| 94  | Light  | Photograph | Sherman photo |
+
+### 2. **AI Packing Analysis**
+The system analyzes each lot's materials and suggests:
+- **Wood crate** - For fragile items (glass, metal, steel)
+- **Cardboard box** - For paper-based works (photographs, prints)
+- **Automatic (AI)** - For standard canvas paintings
+
+### 3. **Delivery Address**
+Type any address - the app uses OpenStreetMap geocoding to:
+- Calculate distance from Paris (in km)
+- Apply distance multipliers:
+  - < 50 km: 1x base rate
+  - 50-300 km: 1.2x
+  - 300-1000 km: 1.5x
+  - > 1000 km: 2x
+
+### 4. **Pricing Calculation**
+
+**Base formula per lot:**
+```
+Price = Base Rate (€220) × Weight Multiplier × Material Multiplier × Distance Multiplier
+      + Delivery Cost + Packing Cost
+```
+
+**Weight Multipliers:**
+- Light: 1x
+- Medium: 1.5x
+- Heavy: 2x
+
+**Material Multipliers:**
+- Canvas/Photograph: 1x
+- Metal: 1.5x
+- Glass/Steel: 1.6x
+
+**Delivery Costs:**
+- Curbside: -€30 (discount)
+- Front delivery: €0
+- White Glove (ground): +€100
+- White Glove (elevator): +€150
+
+**Packing Costs:**
+- Automatic: €0
+- Cardboard box: €20
+- Bubble wrap: €40
+- Wood crate: €80
+- Custom: €100
+
+### 5. **PDF Generation**
+Download a professional quote including:
+- Unique quote ID
+- Client information
+- Shipment details
+- Itemized breakdown per lot
+- Total price in selected currency
+- Validity period (7 days)
+
+---
+
+## 🎯 Use Cases
+
+- **Art Galleries** - Quote shipping for auction items
+- **Collectors** - Estimate transport costs for acquisitions
+- **Logistics Companies** - Generate client-ready quotes
+- **Museums** - Plan exhibition transport budgets
+
+---
+
+## 🔧 Configuration
+
+### Change Base Location
+Edit `PARIS_COORD` in the code:
+```python
+PARIS_COORD = (48.8566, 2.3522)  # (latitude, longitude)
+```
+
+### Adjust Pricing
+Modify multipliers and costs in the config section:
+```python
+WEIGHT_MULT = {"Light": 1, "Medium": 1.5, "Heavy": 2}
+DELIVERY_COST = {"Front delivery": 0, "White Glove (ground)": 100}
+```
+
+### Add Custom Lots
+Extend the `DEMO_LOTS` dictionary:
+```python
+DEMO_LOTS = {
+    96: {"weight": "Medium", "material": "Canvas"},
+    # Add more lots...
+}
+```
+
+---
+
+## 👨‍💼 Admin Features
+
+Toggle **Admin Mode** to:
+- View base shipping costs before markup
+- Add profit margins (0-40%)
+- See transparent pricing breakdown
+
+---
+
+## 📱 Screenshots
+
+```
+┌─────────────────────────────────────────┐
+│  📦 ShipQuote Pro                       │
+│  Professional Shipping Quote • Demo     │
+├─────────────────────────────────────────┤
+│  📦 Lots              │ 📊 Quote Summary│
+│  86, 89, 94           │ ID: SQ-A3F89C2  │
+│                       │                 │
+│  💡 AI Packing        │ Distance: 450km │
+│  [View suggestions]   │ Total: €2,340   │
+│                       │                 │
+│  📍 Delivery          │ [Download PDF]  │
+│  London, UK           │                 │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## 🐛 Troubleshooting
+
+**Address not found:**
+- Check spelling and try adding city/country
+- Geocoding uses OpenStreetMap - some addresses may not exist
+
+**PDF not generating:**
+- Ensure `reportlab` is installed: `pip install reportlab`
+- Check file permissions in output directory
+
+**Lots not recognized:**
+- Only lots 86-95 exist in demo mode
+- Ensure lot numbers are comma-separated integers
+
+---
+
+## 🚀 Deployment
+
+### Streamlit Cloud
+
+1. Push code to GitHub
+2. Connect repository at [streamlit.io/cloud](https://streamlit.io/cloud)
+3. Add `requirements.txt` to repo
+4. Deploy!
+
+### Docker
+
+```dockerfile
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+COPY shipping-calculator.py .
+CMD ["streamlit", "run", "shipping-calculator.py", "--server.port=8501"]
+```
+
+---
+
+## 📄 License
+
+MIT License - Free for personal and commercial use
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Areas for improvement:
+- Add more artwork types and materials
+- Integrate real carrier APIs (FedEx, DHL)
+- Multi-language support
+- Historical quote tracking
+- Email quote delivery
+
+---
+
+
+
+---
+
+## Acknowledgments
+
+- **Streamlit** - Web framework
+- **Geopy** - Geocoding and distance calculation
+- **ReportLab** - PDF generation
+- **OpenStreetMap** - Address geocoding data
+
+---
+
+**Built with ❤️ for the fine art logistics community**
