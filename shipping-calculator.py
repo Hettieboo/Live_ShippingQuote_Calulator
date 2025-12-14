@@ -1,6 +1,187 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
+from uuid import uuid4
+from io import BytesIO
+
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
+from reportlab.lib import colors
+
+# ---------------- CONFIG ----------------
+st.set_page_config("ShipQuote Pro", "📦", layout="wide")
+
+PARIS_COORD = (48.8566, 2.3522)
+DAYS_LEFT = 7
+VALID_UNTIL = datetime.now() + timedelta(days=DAYS_LEFT)
+
+geolocator = Nominatim(user_agent="shipquote_pro")
+
+# ---------------- DEMO DATA ----------------
+DEMO_LOTS = {
+    86: {"title":"Basquiat","weight":"Heavy","material":"Canvas"},
+    87: {"title":"Banksy","weight":"Medium","material":"Canvas"},
+    88: {"title":"Kusama","weight":"Medium","material":"Canvas"},
+    89: {"title":"Hirst","weight":"Heavy","material":"Glass/Steel"},
+    90: {"title":"Koons","weight":"Heavy","material":"Metal"},
+    91: {"title":"Richter","weight":"Medium","material":"Canvas"},
+    92: {"title":"Murakami","weight":"Heavy","material":"Canvas"},
+    93: {"title":"Kiefer","weight":"Heavy","material":"Mixed"},
+    94: {"title":"Sherman","weight":"Light","material":"Photograph"},
+    95: {"title":"Gursky","weight":"Medium","material":"Photograph"},
+}
+
+WEIGHT_MULT = {"Light":1, "Medium":1.5, "Heavy":2}
+MATERIAL_MULT = {"Canvas":1, "Photograph":1, "Mixed":1.2, "Metal":1.5, "Glass/Steel":1.6}
+
+DELIVERY_COST = {
+    "Front delivery":0,
+    "White Glove (ground)":100,
+    "White Glove (elevator)":150,
+    "Curbside":-30
+}
+
+PACKING_COST = {
+    "Automatic (AI)":0,
+    "Wood crate":80,
+    "Cardboard box":20,
+    "Bubble wrap":40,
+    "Custom":100
+}
+
+PACKING_TYPES = list(PACKING_COST.keys())
+DELIVERY_TYPES = list(DELIVERY_COST.keys())
+
+# ---------------- FUNCTIONS ----------------
+def get_distance_and_multiplier(address):
+    try:
+        loc = geolocator.geocode(address, timeout=4)
+        if not loc:
+            return 0, 1
+        km = geodesic(PARIS_COORD, (loc.latitude, loc.longitude)).km
+        if km < 50: m = 1
+        elif km < 300: m = 1.2
+        elif km < 1000: m = 1.5
+        else: m = 2
+        return round(km), m
+    except:
+        return 0, 1
+
+
+def estimate_delivery_time(km, delivery):
+    days = 2 if km < 50 else 4 if km < 300 else 6 if km < 1000 else 10
+    if "White Glove" in delivery:
+        days += 2
+    return f"{days}–{days+2} days"
+
+
+def calculate_shipping(lots, packing, delivery, address):
+    km, dist_mult = get_distance_and_multiplier(address)
+    base = 220
+    total = 0
+    breakdown = []
+
+    for lot in lots:
+        info = DEMO_LOTS[lot]
+        price = (
+            base *
+            WEIGHT_MULT[info["weight"]] *
+            MATERIAL_MULT[info["material"]] *
+            dist_mult
+        )
+        price += DELIVERY_COST[delivery] + PACKING_COST[packing]
+        breakdown.append([f"Lot {lot}", info["weight"], info["material"], f"€{price:,.2f}"])
+        total += price
+
+    return total, breakdown, km
+
+
+def generate_pdf(quote_id, lots, address, packing, delivery, breakdown, total):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("<b>SHIPQUOTE PRO</b>", styles["Title"]))
+    elements.append(Paragraph(f"Quote ID: <b>{quote_id}</b>", styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    elements.append(Paragraph(f"<b>Delivery Address:</b> {address}", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Packing:</b> {packing}", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Delivery Type:</b> {delivery}", styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    table = Table(
+        [["Lot", "Weight", "Material", "Price"]] + breakdown,
+        colWidths=[80, 80, 150, 100]
+    )
+    table.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,0),colors.black),
+        ("TEXTCOLOR",(0,0),(-1,0),colors.white),
+        ("GRID",(0,0),(-1,-1),1,colors.grey),
+        ("BACKGROUND",(0,1),(-1,-1),colors.whitesmoke)
+    ]))
+    elements.append(table)
+    elements.append(Spacer(1, 20))
+
+    elements.append(Paragraph(f"<b>TOTAL QUOTE:</b> €{total:,.2f}", styles["Heading2"]))
+    elements.append(Paragraph(f"Valid for {DAYS_LEFT} days", styles["Italic"]))
+
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+# ---------------- UI ----------------
+st.title("📦 ShipQuote Pro")
+st.caption("Professional Shipping Quote • Demo • Always valid for 7 days")
+
+colL, colR = st.columns([1.3, 1])
+
+with colL:
+    st.subheader("📦 Lot Selection")
+    lot_input = st.text_input("Lot numbers", "86, 89, 94")
+    lots = [int(x) for x in lot_input.split(",") if x.strip().isdigit() and int(x) in DEMO_LOTS]
+
+    st.subheader("📍 Delivery")
+    address = st.text_input("Delivery Address", placeholder="Start typing address...")
+
+    packing = st.selectbox("Packing Type", PACKING_TYPES)
+    delivery = st.selectbox("Delivery Type", DELIVERY_TYPES)
+
+with colR:
+    st.subheader("📊 Shipment Overview")
+
+    if lots and address:
+        shipping, breakdown, km = calculate_shipping(lots, packing, delivery, address)
+        eta = estimate_delivery_time(km, delivery)
+        quote_id = f"SQ-{uuid4().hex[:8].upper()}"
+
+        k1, k2, k3 = st.columns(3)
+        k1.metric("Lots", len(lots))
+        k2.metric("Distance", f"{km} km")
+        k3.metric("ETA", eta)
+
+        st.divider()
+        st.metric("TOTAL QUOTE", f"€{shipping:,.2f}")
+
+        if st.button("📥 Download Quote PDF", use_container_width=True):
+            pdf = generate_pdf(
+                quote_id, lots, address, packing, delivery, breakdown, shipping
+            )
+            st.download_button(
+                "Download PDF",
+                pdf,
+                file_name=f"ShipQuote_{quote_id}.pdf",
+                mime="application/pdf"
+            )
+    else:
+        st.info("Enter lots and delivery address to generate quote.")
+import streamlit as st
+import pandas as pd
+from datetime import datetime, timedelta
 import time
 from geopy.distance import geodesic
 from io import BytesIO
