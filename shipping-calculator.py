@@ -148,6 +148,8 @@ def suggest_packing(lot_nums):
     return overall, suggestion_text
 
 # ========== MAIN APP ==========
+days_left = max(0, (VALID_UNTIL - datetime.now()).days)
+
 st.title("📦 ShipQuote Pro")
 st.caption("Professional Shipping Quote Calculator • Demo: Lots 86-95 • Valid until {0} ({1}d)".format(VALID_UNTIL.strftime('%b %d'), days_left))
 
