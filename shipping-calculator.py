@@ -1,18 +1,21 @@
 import streamlit as st
-import pandas as pd
 from datetime import datetime, timedelta
 from uuid import uuid4
 from io import BytesIO
 
 from geopy.geocoders import Nominatim
 from geopy.distance import geodesic
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+from reportlab.platypus import (
+    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+)
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
+from reportlab.lib.units import cm
 
-# ---------------- CONFIG ----------------
-st.set_page_config("ShipQuote Pro", "📦", layout="wide")
+# ================= CONFIG =================
+st.set_page_config(page_title="ShipQuote Pro", page_icon="📦", layout="wide")
 
 PARIS_COORD = (48.8566, 2.3522)
 DAYS_LEFT = 7
@@ -20,63 +23,106 @@ VALID_UNTIL = datetime.now() + timedelta(days=DAYS_LEFT)
 
 geolocator = Nominatim(user_agent="shipquote_pro")
 
-# ---------------- DEMO DATA ----------------
+# ================= DEMO LOT DATA =================
 DEMO_LOTS = {
-    86: {"title":"Basquiat","weight":"Heavy","material":"Canvas"},
-    87: {"title":"Banksy","weight":"Medium","material":"Canvas"},
-    88: {"title":"Kusama","weight":"Medium","material":"Canvas"},
-    89: {"title":"Hirst","weight":"Heavy","material":"Glass/Steel"},
-    90: {"title":"Koons","weight":"Heavy","material":"Metal"},
-    91: {"title":"Richter","weight":"Medium","material":"Canvas"},
-    92: {"title":"Murakami","weight":"Heavy","material":"Canvas"},
-    93: {"title":"Kiefer","weight":"Heavy","material":"Mixed"},
-    94: {"title":"Sherman","weight":"Light","material":"Photograph"},
-    95: {"title":"Gursky","weight":"Medium","material":"Photograph"},
+    86: {"weight": "Heavy", "material": "Canvas"},
+    87: {"weight": "Medium", "material": "Canvas"},
+    88: {"weight": "Medium", "material": "Canvas"},
+    89: {"weight": "Heavy", "material": "Glass/Steel"},
+    90: {"weight": "Heavy", "material": "Metal"},
+    91: {"weight": "Medium", "material": "Canvas"},
+    92: {"weight": "Heavy", "material": "Canvas"},
+    93: {"weight": "Light", "material": "Photograph"},
+    94: {"weight": "Light", "material": "Photograph"},
+    95: {"weight": "Medium", "material": "Photograph"},
 }
 
-WEIGHT_MULT = {"Light":1, "Medium":1.5, "Heavy":2}
-MATERIAL_MULT = {"Canvas":1, "Photograph":1, "Mixed":1.2, "Metal":1.5, "Glass/Steel":1.6}
+WEIGHT_MULT = {"Light": 1, "Medium": 1.5, "Heavy": 2}
+MATERIAL_MULT = {
+    "Canvas": 1,
+    "Photograph": 1,
+    "Metal": 1.5,
+    "Glass/Steel": 1.6,
+}
 
 DELIVERY_COST = {
-    "Front delivery":0,
-    "White Glove (ground)":100,
-    "White Glove (elevator)":150,
-    "Curbside":-30
+    "Front delivery": 0,
+    "White Glove (ground)": 100,
+    "White Glove (elevator)": 150,
+    "Curbside": -30,
 }
 
 PACKING_COST = {
-    "Automatic (AI)":0,
-    "Wood crate":80,
-    "Cardboard box":20,
-    "Bubble wrap":40,
-    "Custom":100
+    "Automatic (AI)": 0,
+    "Wood crate": 80,
+    "Cardboard box": 20,
+    "Bubble wrap": 40,
+    "Custom": 100,
 }
 
 PACKING_TYPES = list(PACKING_COST.keys())
 DELIVERY_TYPES = list(DELIVERY_COST.keys())
 
-# ---------------- FUNCTIONS ----------------
+CURRENCY_RATE = {"EUR": 1, "USD": 1.1, "GBP": 0.85}
+CURRENCY_SYMBOL = {"EUR": "€", "USD": "$", "GBP": "£"}
+
+# ================= AI PACKING (RESTORED) =================
+def suggest_packing_for_multiple_lots(lot_numbers_text):
+    if not lot_numbers_text or lot_numbers_text.strip() == "":
+        return "Automatic (AI)", "ℹ️ Enter lot numbers for packing suggestions"
+
+    lot_numbers = [n.strip() for n in lot_numbers_text.split(",") if n.strip().isdigit()]
+    if not lot_numbers:
+        return "Automatic (AI)", "ℹ️ Enter valid lot numbers"
+
+    suggestions = []
+    votes = {}
+
+    for num in lot_numbers:
+        lot = int(num)
+        info = DEMO_LOTS.get(lot)
+        if not info:
+            continue
+
+        material = info["material"].lower()
+
+        if any(k in material for k in ["glass", "metal", "steel"]):
+            pack = "Wood crate"
+            reason = "Fragile / rigid materials"
+        elif "photo" in material:
+            pack = "Cardboard box"
+            reason = "Paper-based artwork"
+        else:
+            pack = "Automatic (AI)"
+            reason = "Standard canvas / mixed media"
+
+        suggestions.append(f"Lot {lot}: {pack} — {reason}")
+        votes[pack] = votes.get(pack, 0) + 1
+
+    overall = max(votes, key=votes.get) if votes else "Automatic (AI)"
+    explanation = "💡 AI Packing Analysis\n\n" + "\n".join(suggestions)
+    explanation += f"\n\n✅ Recommended overall packing: {overall}"
+
+    return overall, explanation
+
+# ================= PRICING =================
 def get_distance_and_multiplier(address):
     try:
         loc = geolocator.geocode(address, timeout=4)
         if not loc:
             return 0, 1
         km = geodesic(PARIS_COORD, (loc.latitude, loc.longitude)).km
-        if km < 50: m = 1
-        elif km < 300: m = 1.2
-        elif km < 1000: m = 1.5
-        else: m = 2
+        if km < 50:
+            m = 1
+        elif km < 300:
+            m = 1.2
+        elif km < 1000:
+            m = 1.5
+        else:
+            m = 2
         return round(km), m
     except:
         return 0, 1
-
-
-def estimate_delivery_time(km, delivery):
-    days = 2 if km < 50 else 4 if km < 300 else 6 if km < 1000 else 10
-    if "White Glove" in delivery:
-        days += 2
-    return f"{days}–{days+2} days"
-
 
 def calculate_shipping(lots, packing, delivery, address):
     km, dist_mult = get_distance_and_multiplier(address)
@@ -87,369 +133,181 @@ def calculate_shipping(lots, packing, delivery, address):
     for lot in lots:
         info = DEMO_LOTS[lot]
         price = (
-            base *
-            WEIGHT_MULT[info["weight"]] *
-            MATERIAL_MULT[info["material"]] *
-            dist_mult
+            base
+            * WEIGHT_MULT[info["weight"]]
+            * MATERIAL_MULT[info["material"]]
+            * dist_mult
         )
         price += DELIVERY_COST[delivery] + PACKING_COST[packing]
-        breakdown.append([f"Lot {lot}", info["weight"], info["material"], f"€{price:,.2f}"])
         total += price
+        breakdown.append([f"Lot {lot}", info["weight"], info["material"], f"{price:,.2f}"])
 
     return total, breakdown, km
 
-
-def generate_pdf(quote_id, lots, address, packing, delivery, breakdown, total):
+# ================= PDF =================
+def generate_branded_pdf(
+    quote_id,
+    client,
+    address,
+    packing,
+    delivery,
+    breakdown,
+    total,
+    currency,
+):
     buffer = BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4)
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        leftMargin=2 * cm,
+        rightMargin=2 * cm,
+        topMargin=2 * cm,
+        bottomMargin=2 * cm,
+    )
+
     styles = getSampleStyleSheet()
     elements = []
 
-    elements.append(Paragraph("<b>SHIPQUOTE PRO</b>", styles["Title"]))
-    elements.append(Paragraph(f"Quote ID: <b>{quote_id}</b>", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-
-    elements.append(Paragraph(f"<b>Delivery Address:</b> {address}", styles["Normal"]))
-    elements.append(Paragraph(f"<b>Packing:</b> {packing}", styles["Normal"]))
-    elements.append(Paragraph(f"<b>Delivery Type:</b> {delivery}", styles["Normal"]))
-    elements.append(Spacer(1, 12))
-
-    table = Table(
-        [["Lot", "Weight", "Material", "Price"]] + breakdown,
-        colWidths=[80, 80, 150, 100]
+    # Brand header
+    elements.append(
+        Paragraph(
+            "<font size=22><b>ShipQuote Pro</b></font><br/>"
+            "<font size=10 color='grey'>Fine Art & High-Value Logistics</font>",
+            styles["Normal"],
+        )
     )
-    table.setStyle(TableStyle([
-        ("BACKGROUND",(0,0),(-1,0),colors.black),
-        ("TEXTCOLOR",(0,0),(-1,0),colors.white),
-        ("GRID",(0,0),(-1,-1),1,colors.grey),
-        ("BACKGROUND",(0,1),(-1,-1),colors.whitesmoke)
-    ]))
-    elements.append(table)
+    elements.append(Spacer(1, 16))
+
+    # Meta
+    meta = Table(
+        [
+            ["Quote ID", quote_id],
+            ["Client", client or "—"],
+            ["Issued", datetime.now().strftime("%d %b %Y")],
+            ["Valid Until", (datetime.now() + timedelta(days=7)).strftime("%d %b %Y")],
+        ],
+        colWidths=[4 * cm, 10 * cm],
+    )
+    meta.setStyle(
+        TableStyle(
+            [
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("FONT", (0, 0), (0, -1), "Helvetica-Bold"),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+                ("TOPPADDING", (0, 0), (-1, -1), 8),
+            ]
+        )
+    )
+    elements.append(meta)
     elements.append(Spacer(1, 20))
 
-    elements.append(Paragraph(f"<b>TOTAL QUOTE:</b> €{total:,.2f}", styles["Heading2"]))
-    elements.append(Paragraph(f"Valid for {DAYS_LEFT} days", styles["Italic"]))
+    elements.append(Paragraph("<b>Shipment Details</b>", styles["Heading2"]))
+    elements.append(Paragraph(f"<b>Delivery:</b><br/>{address}", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Packing:</b> {packing}", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Delivery Type:</b> {delivery}", styles["Normal"]))
+    elements.append(Spacer(1, 16))
+
+    table = Table(
+        [["Lot", "Weight", "Material", "Price (€)"]] + breakdown,
+        colWidths=[3 * cm, 3 * cm, 5 * cm, 3 * cm],
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.black),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.whitesmoke, None]),
+                ("ALIGN", (3, 1), (-1, -1), "RIGHT"),
+                ("FONT", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ]
+        )
+    )
+    elements.append(table)
+    elements.append(Spacer(1, 18))
+
+    elements.append(
+        Paragraph(
+            f"<font size=14><b>Total Quote: {CURRENCY_SYMBOL[currency]}{total:,.2f}</b></font>",
+            styles["Heading1"],
+        )
+    )
+
+    elements.append(
+        Paragraph(
+            "<font size=8 color='grey'>Demo quote generated by ShipQuote Pro. "
+            "Non-binding and indicative.</font>",
+            styles["Normal"],
+        )
+    )
 
     doc.build(elements)
     buffer.seek(0)
     return buffer
 
-# ---------------- UI ----------------
+# ================= UI =================
 st.title("📦 ShipQuote Pro")
 st.caption("Professional Shipping Quote • Demo • Always valid for 7 days")
 
-colL, colR = st.columns([1.3, 1])
+if "quote_id" not in st.session_state:
+    st.session_state.quote_id = f"SQ-{uuid4().hex[:8].upper()}"
 
-with colL:
-    st.subheader("📦 Lot Selection")
+QUOTE_ID = st.session_state.quote_id
+
+left, right = st.columns([1.3, 1])
+
+with left:
+    st.subheader("📦 Lots")
     lot_input = st.text_input("Lot numbers", "86, 89, 94")
     lots = [int(x) for x in lot_input.split(",") if x.strip().isdigit() and int(x) in DEMO_LOTS]
 
+    suggested_pack, pack_note = suggest_packing_for_multiple_lots(lot_input)
+    with st.expander("💡 AI Packing"):
+        st.text(pack_note)
+
     st.subheader("📍 Delivery")
-    address = st.text_input("Delivery Address", placeholder="Start typing address...")
+    address = st.text_input("Delivery address")
 
-    packing = st.selectbox("Packing Type", PACKING_TYPES)
-    delivery = st.selectbox("Delivery Type", DELIVERY_TYPES)
+    packing = st.selectbox("Packing", PACKING_TYPES, index=PACKING_TYPES.index(suggested_pack))
+    delivery = st.selectbox("Delivery type", DELIVERY_TYPES)
 
-with colR:
-    st.subheader("📊 Shipment Overview")
+    st.subheader("👤 Client")
+    client_name = st.text_input("Client name / reference")
+
+    currency = st.selectbox("Currency", ["EUR", "USD", "GBP"])
+    admin = st.toggle("Admin pricing view")
+    margin = st.slider("Margin (%)", 0, 40, 20) if admin else 0
+
+with right:
+    st.subheader("📊 Quote Summary")
+    st.caption(f"🆔 Quote ID: `{QUOTE_ID}`")
 
     if lots and address:
         shipping, breakdown, km = calculate_shipping(lots, packing, delivery, address)
-        eta = estimate_delivery_time(km, delivery)
-        quote_id = f"SQ-{uuid4().hex[:8].upper()}"
+        cost = shipping
+        client_price = cost * (1 + margin / 100)
+        final = client_price * CURRENCY_RATE[currency]
 
-        k1, k2, k3 = st.columns(3)
-        k1.metric("Lots", len(lots))
-        k2.metric("Distance", f"{km} km")
-        k3.metric("ETA", eta)
-
-        st.divider()
-        st.metric("TOTAL QUOTE", f"€{shipping:,.2f}")
+        st.metric("Distance from Paris", f"{km} km")
+        st.metric("Total Quote", f"{CURRENCY_SYMBOL[currency]}{final:,.2f}")
 
         if st.button("📥 Download Quote PDF", use_container_width=True):
-            pdf = generate_pdf(
-                quote_id, lots, address, packing, delivery, breakdown, shipping
+            pdf = generate_branded_pdf(
+                QUOTE_ID,
+                client_name,
+                address,
+                packing,
+                delivery,
+                breakdown,
+                final,
+                currency,
             )
             st.download_button(
                 "Download PDF",
                 pdf,
-                file_name=f"ShipQuote_{quote_id}.pdf",
-                mime="application/pdf"
+                file_name=f"ShipQuote_{QUOTE_ID}.pdf",
+                mime="application/pdf",
             )
     else:
         st.info("Enter lots and delivery address to generate quote.")
-import streamlit as st
-import pandas as pd
-from datetime import datetime, timedelta
-import time
-from geopy.distance import geodesic
-from io import BytesIO
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
-
-# ======== GEOLOCATOR ========
-try:
-    from geopy.geocoders import Nominatim
-    from geopy.exc import GeocoderTimedOut, GeocoderServiceError
-    GEOPY_AVAILABLE = True
-except ImportError:
-    GEOPY_AVAILABLE = False
-
-# ======== DEMO DATA ========
-DEMO_LOTS = pd.DataFrame({
-    'LOT': [86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
-    'SALENO': [7185]*10,
-    'TYPESET': [
-        "JEAN-MICHEL BASQUIAT (1960-1988)\nUntitled (Skull), 1981\nAcrylic and oil stick on canvas\n207.6 x 176.8 cm",
-        "BANKSY (B. 1974)\nGirl with Balloon, 2006\nSpray paint on canvas\n150 x 150 cm",
-        "YAYOI KUSAMA (B. 1929)\nPumpkin, 2015\nAcrylic on canvas\n162 x 162 cm",
-        "DAMIEN HIRST (B. 1965)\nThe Physical Impossibility of Death, 1991\nGlass, steel, formaldehyde solution\n213 x 518 x 213 cm",
-        "JEFF KOONS (B. 1955)\nBalloon Dog (Orange), 1994-2000\nMirror-polished stainless steel\n307.3 x 363.2 x 114.3 cm",
-        "GERHARD RICHTER (B. 1932)\nAbstraktes Bild, 1986\nOil on canvas\n200 x 200 cm",
-        "TAKASHI MURAKAMI (B. 1962)\nFlower Ball (3D), 2008\nAcrylic on canvas mounted on board\nDiameter: 300 cm",
-        "ANSELM KIEFER (B. 1945)\nDie Meistersinger, 1981-1982\nOil, emulsion, straw on photograph\n280 x 380 cm",
-        "CINDY SHERMAN (B. 1954)\nUntitled Film Still #21, 1978\nGelatin silver print\n20.3 x 25.4 cm",
-        "ANDREAS GURSKY (B. 1955)\nRhein II, 1999\nC-print mounted on acrylic glass\n190 x 360 cm"
-    ]
-})
-
-PACKING_TYPES = ['Automatic (AI)', 'Wood crate', 'Cardboard box', 'Bubble wrap', 'Custom']
-DELIVERY_TYPES = ['Front delivery', 'White Glove (ground)', 'White Glove (elevator)', 'Curbside']
-
-# ======== DEMO validity: always 7 days ========
-VALID_UNTIL = datetime.now() + timedelta(days=7)
-DAYS_LEFT = 7
-
-# ======== LOT INFO FOR PRICING ========
-LOT_INFO = {
-    86: {"weight": "Heavy", "material": "Canvas"},
-    87: {"weight": "Medium", "material": "Paper"},
-    88: {"weight": "Medium", "material": "Canvas"},
-    89: {"weight": "Heavy", "material": "Glass/Steel"},
-    90: {"weight": "Heavy", "material": "Metal"},
-    91: {"weight": "Medium", "material": "Canvas"},
-    92: {"weight": "Heavy", "material": "Oil on Canvas"},
-    93: {"weight": "Light", "material": "Photograph"},
-    94: {"weight": "Heavy", "material": "Canvas"},
-    95: {"weight": "Heavy", "material": "Acrylic/Glass"}
-}
-
-WEIGHT_MULTIPLIER = {"Light": 1, "Medium": 1.5, "Heavy": 2}
-MATERIAL_MULTIPLIER = {
-    "Canvas":1, "Paper":1, "Photograph":1,
-    "Glass/Steel":1.5, "Metal":1.5, "Oil on Canvas":1.2, "Acrylic/Glass":1.3
-}
-DELIVERY_COST = {"Front delivery":0, "White Glove (ground)":100,
-                 "White Glove (elevator)":50, "Curbside":0}
-PACKING_COST = {"Automatic (AI)":0, "Wood crate":50, "Cardboard box":0, "Bubble wrap":20, "Custom":30}
-
-PARIS_COORD = (48.8566, 2.3522)
-
-# ======== CONFIG ========
-st.set_page_config(page_title="ShipQuote Pro", page_icon="📦", layout="wide")
-
-if 'geocode_cache' not in st.session_state:
-    st.session_state.geocode_cache = {}
-if 'selected_address' not in st.session_state:
-    st.session_state.selected_address = ""
-
-@st.cache_resource
-def get_geolocator():
-    if GEOPY_AVAILABLE:
-        return Nominatim(user_agent="shipquote_pro_demo")
-    return None
-
-geolocator = get_geolocator()
-
-# ======== FUNCTIONS ========
-def search_address(query):
-    if not GEOPY_AVAILABLE or not geolocator or len(query)<3:
-        return []
-    if query in st.session_state.geocode_cache:
-        return st.session_state.geocode_cache[query]
-    try:
-        locations = geolocator.geocode(query, exactly_one=False, limit=5, timeout=3)
-        time.sleep(1)
-        if locations:
-            results = [loc.address for loc in locations]
-            st.session_state.geocode_cache[query] = results
-            return results
-    except:
-        return []
-
-def lookup_lots(lot_input):
-    if not lot_input.strip():
-        return "", "", []
-    lot_nums = [n.strip() for n in lot_input.split(',') if n.strip()][:10]
-    descriptions, sales, valid_lots = [], set(), []
-    for num in lot_nums:
-        try:
-            lot_num = int(num)
-            lot = DEMO_LOTS[DEMO_LOTS['LOT']==lot_num]
-            if not lot.empty:
-                descriptions.append(f"--- LOT {lot_num} ---\n{lot.iloc[0]['TYPESET']}")
-                sales.add(str(lot.iloc[0]['SALENO']))
-                valid_lots.append(lot_num)
-            else:
-                descriptions.append(f"--- LOT {num} ---\n❌ Not found")
-        except:
-            descriptions.append(f"--- {num} ---\n❌ Invalid")
-    return "\n\n".join(descriptions), ", ".join(sales), valid_lots
-
-def suggest_packing(lot_nums):
-    if not lot_nums:
-        return "Automatic (AI)", "ℹ️ Enter lot numbers for AI suggestions"
-    suggestions, votes = [], {}
-    for lot_num in lot_nums:
-        lot = DEMO_LOTS[DEMO_LOTS['LOT']==lot_num]
-        if lot.empty: continue
-        desc = lot.iloc[0]['TYPESET'].lower()
-        if any(kw in desc for kw in ['glass','steel','formaldehyde','metal']):
-            pack, reason = "Wood crate", "Fragile/heavy"
-        elif any(kw in desc for kw in ['print','photograph','paper','gelatin']):
-            pack, reason = "Cardboard box","Paper-based"
-        else:
-            pack, reason = "Automatic (AI)","Standard"
-        suggestions.append(f"**Lot {lot_num}:** {reason}")
-        votes[pack] = votes.get(pack,0)+1
-    overall = max(votes.items(), key=lambda x:x[1])[0] if votes else "Automatic (AI)"
-    text = "💡 **AI Packing Suggestions:**\n"+"\n".join(suggestions)
-    if len(votes)>1: text += f"\n\n✅ **Overall:** {overall}"
-    return overall, text
-
-def get_distance_multiplier(address):
-    if not GEOPY_AVAILABLE or not geolocator or not address:
-        return 1.0
-    try:
-        loc = geolocator.geocode(address, timeout=3)
-        if not loc:
-            return 1.0
-        dest_coord = (loc.latitude, loc.longitude)
-        distance_km = geodesic(PARIS_COORD, dest_coord).km
-        if distance_km < 50: return 1.0
-        elif distance_km < 300: return 1.2
-        elif distance_km < 1000: return 1.5
-        else: return 2.0
-    except:
-        return 1.0
-
-def calculate_shipping(lot_nums, delivery_type, packing_type, location):
-    base_price = 200
-    distance_mult = get_distance_multiplier(location)
-    total, breakdown = 0, []
-    for lot_num in lot_nums:
-        info = LOT_INFO.get(lot_num, {"weight":"Medium","material":"Canvas"})
-        price = (base_price * WEIGHT_MULTIPLIER.get(info["weight"],1)
-                * MATERIAL_MULTIPLIER.get(info["material"],1)
-                + DELIVERY_COST.get(delivery_type,0)
-                + PACKING_COST.get(packing_type,0)) * distance_mult
-        breakdown.append(f"Lot {lot_num}: €{price:.2f} ({info['weight']}, {info['material']})")
-        total += price
-    return total, breakdown
-
-def generate_pdf(lot_input, location, packing, delivery, shipping_breakdown, total):
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(50, 800, "📦 ShipQuote Pro - Quote")
-    c.setFont("Helvetica", 12)
-    c.drawString(50, 780, f"Lots: {lot_input}")
-    c.drawString(50, 760, f"Delivery To: {location}")
-    c.drawString(50, 740, f"Packing: {packing}")
-    c.drawString(50, 720, f"Delivery Type: {delivery}")
-    
-    y = 700
-    c.drawString(50, y, "💰 Shipping Breakdown:")
-    y -= 20
-    for line in shipping_breakdown:
-        c.drawString(60, y, line)
-        y -= 20
-    c.drawString(50, y-10, f"TOTAL: €{total:,.2f}")
-    c.showPage()
-    c.save()
-    buffer.seek(0)
-    return buffer
-
-# ======== MAIN APP ========
-st.title("📦 ShipQuote Pro")
-st.caption(f"Professional Shipping Quote Calculator • Demo: Lots 86-95 • Valid for {DAYS_LEFT} days (expires {VALID_UNTIL.strftime('%b %d')})")
-
-with st.expander("ℹ️ Quick Guide"):
-    st.write("Enter lot numbers → Type address → AI packing → Dynamic pricing → Download PDF")
-
-st.divider()
-col_left, col_right = st.columns([1.2,1])
-
-# ===== LEFT PANEL =====
-with col_left:
-    st.subheader("📦 Lot Information")
-    c1,c2 = st.columns([2,1])
-    with c1:
-        lot_input = st.text_input("Lot Numbers", value="86, 89, 94", placeholder="e.g., 86,87,88")
-    with c2:
-        descriptions, sale_no, valid_lots = lookup_lots(lot_input)
-        st.text_input("Sale #", value=sale_no or "N/A", disabled=True)
-    st.text_area("Descriptions", value=descriptions, height=140, disabled=True)
-    
-    if valid_lots:
-        suggested_pack, packing_text = suggest_packing(valid_lots)
-        with st.expander("💡 AI Packing"):
-            st.write(packing_text)
-    else:
-        suggested_pack = PACKING_TYPES[0]
-
-    st.divider()
-    st.subheader("📍 Shipment Parameters")
-    c1,c2,c3 = st.columns([2,1.5,1.5])
-    with c1:
-        location_input = st.text_input("Delivery Location", placeholder="Start typing address...")
-        if GEOPY_AVAILABLE and location_input and len(location_input)>=3:
-            suggestions = search_address(location_input)
-            if suggestions:
-                selected_address = st.selectbox("Select Address", options=suggestions, index=0)
-                st.session_state.selected_address = selected_address
-        location = st.session_state.selected_address
-    with c2:
-        packing = st.selectbox("Packing", PACKING_TYPES, index=PACKING_TYPES.index(suggested_pack))
-    with c3:
-        delivery = st.selectbox("Delivery", DELIVERY_TYPES)
-
-# ===== RIGHT PANEL =====
-with col_right:
-    st.subheader("💰 Pricing")
-    if valid_lots:
-        shipping_total, shipping_breakdown = calculate_shipping(valid_lots, delivery, packing, location)
-        with st.expander("📦 Shipping Breakdown"):
-            for line in shipping_breakdown:
-                st.write(line)
-    else:
-        shipping_total = 0
-    
-    insurance = st.number_input("Insurance (EUR)", min_value=0.0, value=100.0, step=50.0)
-    total = shipping_total + insurance
-    st.metric("TOTAL", f"€{total:,.2f}")
-
-    st.divider()
-    st.subheader("📋 Quote Summary")
-    st.write(f"**Lots:** {len(valid_lots)} | **Sale:** {sale_no or 'N/A'}")
-    st.write(f"**Pack:** {packing}")
-    st.write(f"**Delivery:** {delivery}")
-    st.write(f"**To:** {location or 'Not specified'}")
-    st.write(f"⏰ {DAYS_LEFT} days remaining")
-
-    st.divider()
-    if st.button("📥 Download PDF", type="primary", use_container_width=True):
-        if not lot_input or not location:
-            st.error("Enter lots & location")
-        else:
-            pdf_buffer = generate_pdf(lot_input, location, packing, delivery, shipping_breakdown, total)
-            st.download_button(
-                label="Download PDF",
-                data=pdf_buffer,
-                file_name="ShipQuote_Pro_Quote.pdf",
-                mime="application/pdf"
-            )
-
-if not GEOPY_AVAILABLE:
-    st.warning("⚠️ Install `geopy` for address autocomplete")
