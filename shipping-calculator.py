@@ -55,6 +55,30 @@ def get_geolocator():
 geolocator = get_geolocator()
 
 # ========== FUNCTIONS ==========
+def search_address(query):
+    """Search for addresses using Geopy"""
+    if not GEOPY_AVAILABLE or not geolocator or not query or len(query) < 3:
+        return []
+    
+    # Check cache
+    if query in st.session_state.geocode_cache:
+        return st.session_state.geocode_cache[query]
+    
+    try:
+        locations = geolocator.geocode(query, exactly_one=False, limit=5, timeout=3)
+        time.sleep(1)  # Respect rate limit
+        
+        if locations:
+            results = [loc.address for loc in locations]
+            st.session_state.geocode_cache[query] = results
+            return results
+    except (GeocoderTimedOut, GeocoderServiceError):
+        pass
+    except Exception as e:
+        st.warning(f"Address search error: {e}")
+    
+    return []
+
 def lookup_lots(lot_input):
     """Parse lot numbers and get descriptions"""
     if not lot_input.strip():
@@ -140,6 +164,10 @@ with st.sidebar:
     st.markdown("---")
     st.header("📋 Available Lots")
     st.dataframe(DEMO_LOTS[['LOT', 'SALENO']], hide_index=True, height=250)
+    
+    if not GEOPY_AVAILABLE:
+        st.markdown("---")
+        st.warning("⚠️ Address autocomplete unavailable\n\nInstall: `pip install geopy`")
 
 # Main content
 col1, col2 = st.columns(2)
@@ -147,11 +175,12 @@ col1, col2 = st.columns(2)
 with col1:
     st.header("📦 Lot Information")
     
-    lot_input = st.text_area(
+    lot_input = st.text_input(
         "Lot Numbers (comma-separated, max 10)",
         value="86, 89, 94",
         placeholder="e.g., 86, 87, 88",
-        help="Available lots: 86-95"
+        help="Available lots: 86-95",
+        key="lot_input"
     )
     
     descriptions, sale_no, valid_lots = lookup_lots(lot_input)
@@ -170,7 +199,41 @@ with col1:
     st.markdown("---")
     st.header("📍 Shipment Parameters")
     
-    location = st.text_input("Delivery Location", placeholder="123 Main St, New York, NY")
+    # Address input with key for rerun
+    location_input = st.text_input(
+        "Delivery Location", 
+        value=st.session_state.get('selected_location', ''),
+        placeholder="Start typing address (e.g., 'Louvre Museum, Paris')",
+        help="Type at least 3 characters to see suggestions",
+        key="location_input"
+    )
+    
+    # Address autocomplete - triggers on every keystroke
+    if GEOPY_AVAILABLE and location_input and len(location_input) >= 3:
+        suggestions = search_address(location_input)
+        
+        if suggestions and suggestions != st.session_state.get('last_suggestions', []):
+            st.session_state.last_suggestions = suggestions
+        
+        if st.session_state.get('last_suggestions'):
+            selected = st.selectbox(
+                "📍 Select from suggestions:",
+                options=[""] + st.session_state.last_suggestions,
+                key="address_select"
+            )
+            if selected:
+                st.session_state.selected_location = selected
+                location = selected
+                st.rerun()
+            else:
+                location = location_input
+        else:
+            location = location_input
+    else:
+        location = location_input
+        if 'last_suggestions' in st.session_state:
+            del st.session_state.last_suggestions
+    
     packing = st.selectbox("Packing Type", PACKING_TYPES, index=PACKING_TYPES.index(suggested_pack))
     delivery = st.selectbox("Delivery Type", DELIVERY_TYPES)
 
