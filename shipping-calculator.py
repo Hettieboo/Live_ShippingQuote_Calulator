@@ -149,135 +149,99 @@ def suggest_packing(lot_nums):
 
 # ========== MAIN APP ==========
 st.title("📦 ShipQuote Pro")
-st.subheader("Professional Shipping Quote Calculator")
+st.caption("Professional Shipping Quote Calculator")
 
 days_left = max(0, (VALID_UNTIL - datetime.now()).days)
 
-st.info("🎨 **DEMO MODE:** Using auction sale #7185 with 10 sample lots (86-95)")
+st.info(f"🎨 **DEMO MODE:** Auction sale #7185 | Lots 86-95 available | Quote valid until {VALID_UNTIL.strftime('%b %d, %Y')} ({days_left} days)")
 
-# Sidebar
-with st.sidebar:
-    st.header("⏰ Quote Validity")
-    st.write(f"**Valid until:** {VALID_UNTIL.strftime('%B %d, %Y')}")
-    st.error(f"**Days remaining:** {days_left} days")
-    
-    st.markdown("---")
-    st.header("📋 Available Lots")
-    st.dataframe(DEMO_LOTS[['LOT', 'SALENO']], hide_index=True, height=250)
-    
-    if not GEOPY_AVAILABLE:
-        st.markdown("---")
-        st.warning("⚠️ Address autocomplete unavailable\n\nInstall: `pip install geopy`")
+# Single column layout
+st.header("📦 Lot Information")
 
-# Main content
-col1, col2 = st.columns(2)
-
-with col1:
-    st.header("📦 Lot Information")
-    
+col_lot1, col_lot2 = st.columns([2, 1])
+with col_lot1:
     lot_input = st.text_input(
         "Lot Numbers (comma-separated, max 10)",
         value="86, 89, 94",
         placeholder="e.g., 86, 87, 88",
-        help="Available lots: 86-95",
         key="lot_input"
     )
-    
+with col_lot2:
     descriptions, sale_no, valid_lots = lookup_lots(lot_input)
-    
     st.text_input("Sale Number", value=sale_no or "N/A", disabled=True)
-    st.text_area("Descriptions", value=descriptions, height=250, disabled=True)
+
+st.text_area("Descriptions", value=descriptions, height=180, disabled=True)
+
+# AI Suggestions - compact
+if valid_lots:
+    suggested_pack, suggestion_text = suggest_packing(valid_lots)
+    with st.expander("💡 AI Packing Suggestions", expanded=False):
+        st.markdown(suggestion_text)
+else:
+    suggested_pack = PACKING_TYPES[0]
+
+st.divider()
+
+# Shipment & Pricing in columns
+col1, col2, col3 = st.columns([1.5, 1.5, 1])
+
+with col1:
+    st.subheader("📍 Shipment")
     
-    # AI Suggestions
-    if valid_lots:
-        suggested_pack, suggestion_text = suggest_packing(valid_lots)
-        with st.expander("💡 AI Packing Suggestions", expanded=True):
-            st.markdown(suggestion_text)
-    else:
-        suggested_pack = PACKING_TYPES[0]
-    
-    st.markdown("---")
-    st.header("📍 Shipment Parameters")
-    
-    # Address input with key for rerun
-    location_input = st.text_input(
+    location = st.text_input(
         "Delivery Location", 
-        value=st.session_state.get('selected_location', ''),
-        placeholder="Start typing address (e.g., 'Louvre Museum, Paris')",
-        help="Type at least 3 characters to see suggestions",
+        placeholder="Start typing address...",
         key="location_input"
     )
     
-    # Address autocomplete - triggers on every keystroke
-    if GEOPY_AVAILABLE and location_input and len(location_input) >= 3:
-        suggestions = search_address(location_input)
-        
-        if suggestions and suggestions != st.session_state.get('last_suggestions', []):
-            st.session_state.last_suggestions = suggestions
-        
-        if st.session_state.get('last_suggestions'):
-            selected = st.selectbox(
-                "📍 Select from suggestions:",
-                options=[""] + st.session_state.last_suggestions,
-                key="address_select"
+    # Address autocomplete - original working logic
+    if GEOPY_AVAILABLE and location and len(location) >= 3:
+        suggestions = search_address(location)
+        if suggestions:
+            selected_address = st.selectbox(
+                "📍 Suggestions",
+                options=[""] + suggestions,
+                index=0
             )
-            if selected:
-                st.session_state.selected_location = selected
-                location = selected
-                st.rerun()
-            else:
-                location = location_input
-        else:
-            location = location_input
-    else:
-        location = location_input
-        if 'last_suggestions' in st.session_state:
-            del st.session_state.last_suggestions
+            if selected_address:
+                location = selected_address
     
-    packing = st.selectbox("Packing Type", PACKING_TYPES, index=PACKING_TYPES.index(suggested_pack))
-    delivery = st.selectbox("Delivery Type", DELIVERY_TYPES)
+    packing = st.selectbox("Packing", PACKING_TYPES, index=PACKING_TYPES.index(suggested_pack))
+    delivery = st.selectbox("Delivery", DELIVERY_TYPES)
 
 with col2:
-    st.header("💰 Pricing")
-    
-    shipping = st.number_input("Shipping Cost (EUR)", min_value=0.0, value=500.0, step=10.0)
-    insurance = st.number_input("Insurance (EUR)", min_value=0.0, value=100.0, step=10.0)
+    st.subheader("💰 Pricing")
+    shipping = st.number_input("Shipping (EUR)", min_value=0.0, value=500.0, step=50.0)
+    insurance = st.number_input("Insurance (EUR)", min_value=0.0, value=100.0, step=50.0)
     
     total = shipping + insurance
-    st.metric("💵 TOTAL WITH INSURANCE", f"€{total:,.2f}")
+    st.metric("**TOTAL**", f"€{total:,.2f}")
+
+with col3:
+    st.subheader("📋 Summary")
+    st.caption(f"**Lots:** {len(valid_lots)}")
+    st.caption(f"**Sale:** {sale_no or 'N/A'}")
+    st.caption(f"**Packing:** {packing[:15]}...")
+    st.caption(f"**Delivery:** {delivery[:15]}...")
+    st.caption(f"**To:** {(location[:20] + '...') if len(location) > 20 else (location or 'TBD')}")
+    st.caption(f"⏰ {days_left} days left")
     
-    st.markdown("---")
-    st.header("📋 Quote Summary")
-    
-    st.markdown(f"""
-    **Number of Lots:** {len(valid_lots)}  
-    **Sale Number:** {sale_no or 'N/A'}  
-    **Packing:** {packing}  
-    **Delivery Type:** {delivery}  
-    **Destination:** {location or 'Not specified'}  
-    
-    ---
-    
-    ⏰ **Valid until:** {VALID_UNTIL.strftime('%B %d, %Y')}  
-    **Days remaining:** {days_left} days
-    """)
-    
-    if st.button("📥 Download Quote as PDF", type="primary", use_container_width=True):
+    if st.button("📥 PDF", type="primary", use_container_width=True):
         if not lot_input or not location:
-            st.error("Please enter lot numbers and location")
+            st.error("Need lots & location")
         else:
-            st.success("✅ PDF would be generated here (requires reportlab)")
+            st.success("✅ PDF ready")
 
-# Footer
-st.markdown("---")
-st.markdown("""
-### 📋 How to use:
-1. **Enter lot numbers** (e.g., "86, 89, 94") - comma-separated, max 10 lots
-2. **Descriptions auto-populate** from demo database
-3. **AI suggests packing** based on artwork materials
-4. **Enter delivery location** and select delivery options
-5. **Set pricing** to calculate total with insurance
-6. **Download PDF quote** (feature requires reportlab library)
+# Compact footer
+st.divider()
+with st.expander("📋 How to use"):
+    st.markdown("""
+    1. Enter lot numbers (86-95) → auto-fills descriptions
+    2. Type delivery address → select from suggestions  
+    3. AI suggests packing based on materials
+    4. Set pricing → see total with insurance
+    5. Download PDF quote
+    """)
 
-*Demo data includes 10 famous artworks from auction sale #7185*
-""")
+if not GEOPY_AVAILABLE:
+    st.warning("⚠️ Install `geopy` for address autocomplete")
