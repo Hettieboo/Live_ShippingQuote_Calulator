@@ -1,5 +1,5 @@
 """
-SHIPQUOTE PRO - STREAMLIT APP
+SHIPQUOTE PRO - STREAMLIT APP (DEMO VERSION)
 
 Installation:
 pip install streamlit pandas openpyxl geopy reportlab
@@ -7,15 +7,22 @@ pip install streamlit pandas openpyxl geopy reportlab
 Usage:
 streamlit run app.py
 
-Then upload your Excel file using the file uploader in the sidebar.
+Demo data is pre-loaded. You can also upload your own Excel file.
 """
 
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from geopy.geocoders import Nominatim
-from geopy.exc import GeocoderTimedOut, GeocoderServiceError
 import io
+
+# Try to import geopy for geocoding
+try:
+    from geopy.geocoders import Nominatim
+    from geopy.exc import GeocoderTimedOut, GeocoderServiceError
+    GEOPY_AVAILABLE = True
+except ImportError:
+    GEOPY_AVAILABLE = False
+    st.warning("⚠️ Geopy not installed. Address search disabled. Run: pip install geopy")
 
 # Try to import reportlab for PDF generation
 try:
@@ -36,6 +43,24 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ========== DEMO DATA ==========
+DEMO_DATA = {
+    'LOT': [86, 87, 88, 89, 90, 91, 92, 93, 94, 95],
+    'SALENO': [7185] * 10,
+    'TYPESET': [
+        "JEAN-MICHEL BASQUIAT (1960-1988)\nUntitled (Skull), 1981\nAcrylic and oil stick on canvas\n207.6 x 176.8 cm (81 3/4 x 69 5/8 in.)",
+        "BANKSY (B. 1974)\nGirl with Balloon, 2006\nSpray paint on canvas\n150 x 150 cm",
+        "YAYOI KUSAMA (B. 1929)\nPumpkin, 2015\nAcrylic on canvas\n162 x 162 cm",
+        "DAMIEN HIRST (B. 1965)\nThe Physical Impossibility of Death, 1991\nGlass, steel, formaldehyde solution\n213 x 518 x 213 cm",
+        "JEFF KOONS (B. 1955)\nBalloon Dog (Orange), 1994-2000\nMirror-polished stainless steel with transparent color coating\n307.3 x 363.2 x 114.3 cm",
+        "GERHARD RICHTER (B. 1932)\nAbstraktes Bild, 1986\nOil on canvas\n200 x 200 cm",
+        "TAKASHI MURAKAMI (B. 1962)\nFlower Ball (3D), 2008\nAcrylic on canvas mounted on board\n Diameter: 300 cm",
+        "ANSELM KIEFER (B. 1945)\nDie Meistersinger, 1981-1982\nOil, emulsion, straw on photograph mounted on canvas\n280 x 380 cm",
+        "CINDY SHERMAN (B. 1954)\nUntitled Film Still #21, 1978\nGelatin silver print\n20.3 x 25.4 cm (8 x 10 in.)",
+        "ANDREAS GURSKY (B. 1955)\nRhein II, 1999\nC-print mounted on acrylic glass\n190 x 360 cm"
+    ]
+}
 
 # ========== CONFIGURATION ==========
 VALID_UNTIL_DATE = datetime(2025, 12, 8)
@@ -58,15 +83,20 @@ PACKING_TYPES = [
 # Initialize geocoder
 @st.cache_resource
 def get_geolocator():
-    return Nominatim(user_agent="shipquote_pro_v1")
+    if GEOPY_AVAILABLE:
+        return Nominatim(user_agent="shipquote_pro_v1")
+    return None
 
 geolocator = get_geolocator()
 
 # ========== SESSION STATE INITIALIZATION ==========
 if 'lot_df' not in st.session_state:
-    st.session_state.lot_df = None
+    # Load demo data by default
+    st.session_state.lot_df = pd.DataFrame(DEMO_DATA)
 if 'geocode_cache' not in st.session_state:
     st.session_state.geocode_cache = {}
+if 'using_demo_data' not in st.session_state:
+    st.session_state.using_demo_data = True
 
 # ========== HELPER FUNCTIONS ==========
 
@@ -78,6 +108,9 @@ def calculate_days_remaining():
 
 def search_address(query):
     """Search for addresses using Geopy"""
+    if not GEOPY_AVAILABLE or not geolocator:
+        return []
+    
     if not query or len(query) < 3:
         return []
     
@@ -103,6 +136,9 @@ def format_address(address_text):
     """Format and validate address"""
     if not address_text:
         return "Not specified"
+    
+    if not GEOPY_AVAILABLE or not geolocator:
+        return address_text
     
     try:
         location = geolocator.geocode(address_text, timeout=3)
@@ -132,6 +168,11 @@ def lookup_multiple_lots(lot_numbers_text):
     for lot_num_str in lot_numbers:
         try:
             lot_num = int(float(lot_num_str))
+            
+            if lot_num < 0:
+                all_descriptions.append(f"--- LOT {lot_num_str} ---\n❌ Invalid: negative number\n")
+                continue
+            
             lot_row = st.session_state.lot_df[st.session_state.lot_df['LOT'] == lot_num]
             
             if not lot_row.empty:
@@ -142,6 +183,8 @@ def lookup_multiple_lots(lot_numbers_text):
                 sale_numbers.add(sale_no)
             else:
                 all_descriptions.append(f"--- LOT {lot_num} ---\n❌ Not found in database\n")
+        except ValueError:
+            all_descriptions.append(f"--- {lot_num_str} ---\n❌ Invalid: not a number\n")
         except Exception as e:
             all_descriptions.append(f"--- {lot_num_str} ---\n❌ Error: {str(e)}\n")
     
@@ -159,24 +202,25 @@ def suggest_packing_type(description):
     
     # Check for fragile items
     fragile_keywords = ['glass', 'ceramic', 'porcelain', 'fragile', 'caisson lumineux',
-                        'light box', 'neon', 'installation', 'sculpture', 'bronze', 'marble']
+                        'light box', 'neon', 'installation', 'sculpture', 'bronze', 'marble',
+                        'formaldehyde', 'steel']
     
     # Check for large/heavy items
-    heavy_keywords = ['sculpture', 'bronze', 'marble', 'stone', 'metal', 'installation']
+    heavy_keywords = ['sculpture', 'bronze', 'marble', 'stone', 'metal', 'installation', 'steel', 'stainless']
     
     # Check for delicate works on paper
     paper_keywords = ['paper', 'watercolor', 'gouache', 'drawing', 'print', 'etching',
-                      'lithograph', 'photograph', 'photo', 'c-print', 'tirage']
+                      'lithograph', 'photograph', 'photo', 'c-print', 'tirage', 'gelatin silver']
     
     # Check for paintings
-    painting_keywords = ['canvas', 'oil', 'acrylic', 'painting', 'huile', 'toile']
+    painting_keywords = ['canvas', 'oil', 'acrylic', 'painting', 'huile', 'toile', 'oil stick']
     
     # Decision logic
     if any(keyword in description_lower for keyword in fragile_keywords):
         if any(keyword in description_lower for keyword in heavy_keywords):
-            return "Wood crate", "Wood crate - fragile/heavy (glass, light box, or sculpture)"
+            return "Wood crate", "Wood crate - fragile/heavy (glass, steel, or sculpture)"
         else:
-            return "Wood crate", "Wood crate - fragile items (glass, light box, or delicate materials)"
+            return "Wood crate", "Wood crate - fragile items (glass or delicate materials)"
     
     elif any(keyword in description_lower for keyword in paper_keywords):
         return "Cardboard box", "Cardboard box - works on paper (photograph, print, or paper-based)"
@@ -393,27 +437,62 @@ def main():
     st.title("📦 ShipQuote Pro")
     st.subheader("Professional Shipping Quote Calculator")
     
+    # Demo banner
+    if st.session_state.using_demo_data:
+        st.info("🎨 **DEMO MODE:** Using sample auction data. Upload your own Excel file to customize.")
+    
     # Sidebar - File Upload
     with st.sidebar:
         st.header("📁 Data Upload")
         
+        with st.expander("📋 Required Excel Format", expanded=False):
+            st.markdown("""
+            **Required Columns:**
+            - `LOT` (integer): Lot number
+            - `TYPESET` (text): Item description
+            - `SALENO` (integer): Sale/auction number
+            
+            **Example:**
+            | LOT | SALENO | TYPESET |
+            |-----|--------|---------|
+            | 86  | 7185   | JEAN-MICHEL BASQUIAT... |
+            | 87  | 7185   | BANKSY... |
+            
+            The app will auto-populate descriptions when you enter lot numbers.
+            """)
+        
         uploaded_file = st.file_uploader(
-            "Upload Excel File",
+            "Upload Your Excel File",
             type=['xlsx', 'xls'],
-            help="Upload your lot database Excel file"
+            help="Upload your lot database Excel file with LOT, SALENO, and TYPESET columns"
         )
         
         if uploaded_file is not None:
             try:
-                st.session_state.lot_df = pd.read_excel(uploaded_file)
-                st.success(f"✅ Loaded {len(st.session_state.lot_df)} lots")
+                df = pd.read_excel(uploaded_file)
                 
-                # Display sale number if available
-                if 'SALENO' in st.session_state.lot_df.columns:
-                    first_sale = st.session_state.lot_df['SALENO'].iloc[0]
-                    st.info(f"📋 Sale Number: {int(first_sale)}")
+                # Validate required columns
+                required_columns = ['LOT', 'TYPESET']
+                missing_columns = [col for col in required_columns if col not in df.columns]
+                
+                if missing_columns:
+                    st.error(f"❌ Missing required columns: {', '.join(missing_columns)}")
+                    st.info("Please ensure your Excel file contains: LOT, TYPESET, and optionally SALENO")
+                else:
+                    st.session_state.lot_df = df
+                    st.session_state.using_demo_data = False
+                    st.session_state.geocode_cache = {}  # Clear cache on new upload
+                    st.success(f"✅ Loaded {len(df)} lots from your file")
+                    
+                    # Display sale number if available
+                    if 'SALENO' in df.columns:
+                        first_sale = df['SALENO'].iloc[0]
+                        st.info(f"📋 Sale Number: {int(first_sale)}")
             except Exception as e:
                 st.error(f"❌ Error loading file: {e}")
+        elif st.session_state.using_demo_data:
+            st.success(f"✅ Using demo data ({len(st.session_state.lot_df)} sample lots)")
+            st.info(f"📋 Demo Sale Number: 7185")
         
         st.markdown("---")
         
@@ -425,12 +504,9 @@ def main():
         
         if not PDF_AVAILABLE:
             st.warning("⚠️ PDF download unavailable\nInstall reportlab to enable")
-    
-    # Check if data is loaded
-    if st.session_state.lot_df is None:
-        st.warning("⚠️ Please upload your Excel file in the sidebar to begin")
-        st.info("👈 Click 'Browse files' in the sidebar to get started")
-        st.stop()
+        
+        if not GEOPY_AVAILABLE:
+            st.warning("⚠️ Address search unavailable\nInstall geopy to enable")
     
     # Main content area
     col1, col2 = st.columns([1, 1])
@@ -438,10 +514,13 @@ def main():
     with col1:
         st.header("📦 Lot Information")
         
+        # Show example lot numbers for demo
+        demo_hint = "Try: 86, 89, 94 (or any from 86-95)" if st.session_state.using_demo_data else "Enter lot numbers from your uploaded file"
+        
         lot_numbers = st.text_area(
             "Lot Numbers (up to 10)",
-            placeholder="Enter lot numbers separated by commas (e.g., 86, 87, 88)",
-            help="Enter up to 10 lot numbers. Descriptions will auto-populate.",
+            placeholder=demo_hint,
+            help="Enter up to 10 lot numbers separated by commas. Descriptions will auto-populate.",
             height=100
         )
         
@@ -474,11 +553,11 @@ def main():
         location = st.text_input(
             "Delivery Location",
             placeholder="Start typing address (e.g., '123 Main St, New York' or 'Louvre Museum, Paris')",
-            help="Type at least 3 characters to see suggestions"
+            help="Type at least 3 characters to see suggestions (requires geopy)"
         )
         
         # Address suggestions
-        if location and len(location) >= 3:
+        if GEOPY_AVAILABLE and location and len(location) >= 3:
             suggestions = search_address(location)
             if suggestions:
                 selected_address = st.selectbox(
@@ -577,18 +656,20 @@ def main():
                             st.error("Error generating PDF")
                     except Exception as e:
                         st.error(f"Error creating PDF: {str(e)}")
+        else:
+            st.info("📥 Install reportlab to enable PDF downloads")
     
     # Footer
     st.markdown("---")
     st.markdown("""
     ### 📋 How to use:
-    1. **Upload your Excel file** in the sidebar
+    1. **Upload your Excel file** in the sidebar (or use demo data)
     2. **Enter lot numbers** (comma-separated for multiple, e.g., "86, 87, 88") - up to 10 lots per quote
     3. **Descriptions auto-populate** from your Excel file
-    4. **Search for delivery address** - suggestions appear as you type
+    4. **Search for delivery address** - suggestions appear as you type (requires geopy)
     5. **Select packing and delivery options** (AI suggestions provided)
     6. **Enter pricing** to see total and summary
-    7. **Download PDF** of your complete quote
+    7. **Download PDF** of your complete quote (requires reportlab)
     
     Made with Streamlit | Powered by OpenStreetMap
     """)
