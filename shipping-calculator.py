@@ -2,6 +2,10 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import time
+from geopy.distance import geodesic
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 # ======== GEOLOCATOR ========
 try:
@@ -58,6 +62,8 @@ MATERIAL_MULTIPLIER = {
 DELIVERY_COST = {"Front delivery":0, "White Glove (ground)":100,
                  "White Glove (elevator)":50, "Curbside":0}
 PACKING_COST = {"Automatic (AI)":0, "Wood crate":50, "Cardboard box":0, "Bubble wrap":20, "Custom":30}
+
+PARIS_COORD = (48.8566, 2.3522)
 
 # ======== CONFIG ========
 st.set_page_config(page_title="ShipQuote Pro", page_icon="📦", layout="wide")
@@ -131,18 +137,58 @@ def suggest_packing(lot_nums):
     if len(votes)>1: text += f"\n\n✅ **Overall:** {overall}"
     return overall, text
 
-def calculate_shipping(lot_nums, delivery_type, packing_type):
+def get_distance_multiplier(address):
+    if not GEOPY_AVAILABLE or not geolocator or not address:
+        return 1.0
+    try:
+        loc = geolocator.geocode(address, timeout=3)
+        if not loc:
+            return 1.0
+        dest_coord = (loc.latitude, loc.longitude)
+        distance_km = geodesic(PARIS_COORD, dest_coord).km
+        if distance_km < 50: return 1.0
+        elif distance_km < 300: return 1.2
+        elif distance_km < 1000: return 1.5
+        else: return 2.0
+    except:
+        return 1.0
+
+def calculate_shipping(lot_nums, delivery_type, packing_type, location):
     base_price = 200
+    distance_mult = get_distance_multiplier(location)
     total, breakdown = 0, []
     for lot_num in lot_nums:
         info = LOT_INFO.get(lot_num, {"weight":"Medium","material":"Canvas"})
-        price = base_price * WEIGHT_MULTIPLIER.get(info["weight"],1) \
-                * MATERIAL_MULTIPLIER.get(info["material"],1) \
-                + DELIVERY_COST.get(delivery_type,0) \
-                + PACKING_COST.get(packing_type,0)
+        price = (base_price * WEIGHT_MULTIPLIER.get(info["weight"],1)
+                * MATERIAL_MULTIPLIER.get(info["material"],1)
+                + DELIVERY_COST.get(delivery_type,0)
+                + PACKING_COST.get(packing_type,0)) * distance_mult
         breakdown.append(f"Lot {lot_num}: €{price:.2f} ({info['weight']}, {info['material']})")
         total += price
     return total, breakdown
+
+def generate_pdf(lot_input, location, packing, delivery, shipping_breakdown, total):
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, 800, "📦 ShipQuote Pro - Quote")
+    c.setFont("Helvetica", 12)
+    c.drawString(50, 780, f"Lots: {lot_input}")
+    c.drawString(50, 760, f"Delivery To: {location}")
+    c.drawString(50, 740, f"Packing: {packing}")
+    c.drawString(50, 720, f"Delivery Type: {delivery}")
+    
+    y = 700
+    c.drawString(50, y, "💰 Shipping Breakdown:")
+    y -= 20
+    for line in shipping_breakdown:
+        c.drawString(60, y, line)
+        y -= 20
+    c.drawString(50, y-10, f"TOTAL: €{total:,.2f}")
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
 
 # ======== MAIN APP ========
 st.title("📦 ShipQuote Pro")
@@ -192,7 +238,7 @@ with col_left:
 with col_right:
     st.subheader("💰 Pricing")
     if valid_lots:
-        shipping_total, shipping_breakdown = calculate_shipping(valid_lots, delivery, packing)
+        shipping_total, shipping_breakdown = calculate_shipping(valid_lots, delivery, packing, location)
         with st.expander("📦 Shipping Breakdown"):
             for line in shipping_breakdown:
                 st.write(line)
@@ -216,7 +262,13 @@ with col_right:
         if not lot_input or not location:
             st.error("Enter lots & location")
         else:
-            st.success("✅ PDF ready")
+            pdf_buffer = generate_pdf(lot_input, location, packing, delivery, shipping_breakdown, total)
+            st.download_button(
+                label="Download PDF",
+                data=pdf_buffer,
+                file_name="ShipQuote_Pro_Quote.pdf",
+                mime="application/pdf"
+            )
 
 if not GEOPY_AVAILABLE:
     st.warning("⚠️ Install `geopy` for address autocomplete")
