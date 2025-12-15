@@ -109,6 +109,13 @@ st.markdown("""
         background: #f8f9fa;
         border-color: #2d3748;
     }
+    .stButton>button[kind="primary"] {
+        background: #2d3748;
+        color: white;
+    }
+    .stButton>button[kind="primary"]:hover {
+        background: #1a202c;
+    }
     .address-suggestion {
         background: white;
         border: 1px solid #e0e0e0;
