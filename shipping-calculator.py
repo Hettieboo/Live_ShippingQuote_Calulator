@@ -17,90 +17,123 @@ from reportlab.lib.units import cm
 # ================= CONFIG =================
 st.set_page_config(page_title="ShipQuote Pro", page_icon="📦", layout="wide")
 
-# Custom CSS for modern design
+# Custom CSS for clean, compact design
 st.markdown("""
 <style>
     .stApp {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-    .main-container {
-        background: white;
-        border-radius: 20px;
-        padding: 2rem;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        background: #f8f9fa;
     }
     .lot-card {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        border-radius: 12px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        border: 2px solid transparent;
-        transition: all 0.3s ease;
+        background: white;
+        border-radius: 8px;
+        padding: 0.6rem 0.8rem;
+        margin: 0.4rem 0;
+        border: 1.5px solid #e0e0e0;
+        transition: all 0.2s ease;
         cursor: pointer;
     }
     .lot-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-        border-color: #667eea;
+        border-color: #2d3748;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     .lot-card-selected {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #2d3748;
         color: white;
-        border-color: #764ba2;
+        border-color: #2d3748;
     }
     .lot-badge {
         display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
+        padding: 0.15rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.7rem;
         font-weight: 600;
-        margin: 0.25rem;
+        margin-right: 0.3rem;
     }
-    .badge-heavy { background: #ff6b6b; color: white; }
-    .badge-medium { background: #ffd93d; color: #333; }
-    .badge-light { background: #6bcf7f; color: white; }
+    .badge-heavy { background: #e53e3e; color: white; }
+    .badge-medium { background: #f6ad55; color: white; }
+    .badge-light { background: #48bb78; color: white; }
     .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 15px;
-        padding: 1.5rem;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 1rem;
         text-align: center;
-        margin: 1rem 0;
+        margin: 0.5rem 0;
+    }
+    .metric-card h4 {
+        color: #718096;
+        font-size: 0.85rem;
+        margin: 0;
+        font-weight: 500;
+    }
+    .metric-card h2, .metric-card h1 {
+        color: #2d3748;
+        margin: 0.3rem 0 0 0;
     }
     .quote-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 2rem;
-        border-radius: 15px;
-        margin-bottom: 2rem;
-        text-align: center;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-left: 4px solid #2d3748;
+        padding: 1.2rem 1.5rem;
+        border-radius: 8px;
+        margin-bottom: 1.5rem;
+    }
+    .quote-header h1 {
+        color: #2d3748;
+        font-size: 1.8rem;
+        margin: 0;
+    }
+    .quote-header p {
+        color: #718096;
+        margin: 0.3rem 0 0 0;
     }
     .stButton>button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: #2d3748;
         color: white;
         border: none;
-        border-radius: 10px;
-        padding: 0.75rem 2rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
     }
     .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 16px rgba(102, 126, 234, 0.4);
+        background: #1a202c;
+        box-shadow: 0 2px 8px rgba(45, 55, 72, 0.3);
+    }
+    .stButton>button[kind="secondary"] {
+        background: white;
+        color: #2d3748;
+        border: 1px solid #e0e0e0;
+    }
+    .stButton>button[kind="secondary"]:hover {
+        background: #f8f9fa;
+        border-color: #2d3748;
     }
     .address-suggestion {
         background: white;
         border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        padding: 0.75rem;
-        margin: 0.25rem 0;
+        border-radius: 6px;
+        padding: 0.6rem;
+        margin: 0.3rem 0;
         cursor: pointer;
         transition: all 0.2s ease;
+        font-size: 0.9rem;
     }
     .address-suggestion:hover {
-        background: #f5f7fa;
-        border-color: #667eea;
-        transform: translateX(5px);
+        border-color: #2d3748;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .section-divider {
+        border-top: 1px solid #e0e0e0;
+        margin: 1rem 0;
+    }
+    div[data-testid="stExpander"] {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+    }
+    .stSelectbox, .stTextInput {
+        margin-bottom: 0.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -154,19 +187,28 @@ DELIVERY_TYPES = list(DELIVERY_COST.keys())
 CURRENCY_RATE = {"EUR": 1, "USD": 1.1, "GBP": 0.85}
 CURRENCY_SYMBOL = {"EUR": "€", "USD": "$", "GBP": "£"}
 
-# Sample addresses for autocomplete
-SAMPLE_ADDRESSES = [
-    "10 Downing Street, London, UK",
-    "1600 Pennsylvania Avenue, Washington DC, USA",
-    "Champs-Élysées, Paris, France",
-    "Via del Corso, Rome, Italy",
-    "Las Ramblas, Barcelona, Spain",
-    "Unter den Linden, Berlin, Germany",
-    "Nevsky Prospect, Saint Petersburg, Russia",
-    "Rue de Rivoli, Paris, France",
-    "Fifth Avenue, New York, USA",
-    "Oxford Street, London, UK",
-]
+# Function to get address suggestions from Nominatim
+def get_address_suggestions(query):
+    if not query or len(query) < 3:
+        return []
+    
+    try:
+        results = geolocator.geocode(
+            query, 
+            exactly_one=False, 
+            limit=5,
+            timeout=3,
+            addressdetails=True
+        )
+        
+        if results:
+            suggestions = []
+            for result in results:
+                suggestions.append(result.address)
+            return suggestions
+        return []
+    except Exception as e:
+        return []
 
 # ================= AI PACKING =================
 def suggest_packing_for_lots(selected_lots):
@@ -350,25 +392,28 @@ if "selected_lots" not in st.session_state:
     st.session_state.selected_lots = []
 if "address_input" not in st.session_state:
     st.session_state.address_input = ""
+if "address_suggestions" not in st.session_state:
+    st.session_state.address_suggestions = []
+if "show_suggestions" not in st.session_state:
+    st.session_state.show_suggestions = True
 
 QUOTE_ID = st.session_state.quote_id
 
 # Header
 st.markdown(f"""
 <div class="quote-header">
-    <h1 style="margin:0; font-size: 2.5rem;">📦 ShipQuote Pro</h1>
-    <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Professional Fine Art & High-Value Logistics</p>
-    <p style="margin: 0.5rem 0 0 0; font-size: 0.9rem;">Quote ID: <b>{QUOTE_ID}</b> • Valid for {DAYS_LEFT} days</p>
+    <h1>📦 ShipQuote Pro</h1>
+    <p style="font-size: 0.9rem;">Quote ID: <b>{QUOTE_ID}</b> • Valid for {DAYS_LEFT} days</p>
 </div>
 """, unsafe_allow_html=True)
 
 left, right = st.columns([1.4, 1])
 
 with left:
-    st.markdown("### 🎨 Select Artwork Lots")
+    st.markdown("#### 🎨 Select Artwork Lots")
     
-    # Display lots as interactive cards
-    cols_per_row = 2
+    # Display lots as compact interactive cards
+    cols_per_row = 3
     lot_numbers = list(DEMO_LOTS.keys())
     
     for i in range(0, len(lot_numbers), cols_per_row):
@@ -385,23 +430,17 @@ with left:
                     
                     card_html = f"""
                     <div class="lot-card {'lot-card-selected' if is_selected else ''}">
-                        <div style="display: flex; justify-content: space-between; align-items: start;">
-                            <div>
-                                <h4 style="margin: 0 0 0.5rem 0;">Lot #{lot_num}</h4>
-                                <p style="margin: 0; font-size: 0.9rem; opacity: 0.8;">{lot_info['title']}</p>
-                                <p style="margin: 0.25rem 0 0 0; font-size: 0.85rem; font-style: italic; opacity: 0.7;">{lot_info['artist']}</p>
-                            </div>
-                        </div>
-                        <div style="margin-top: 0.75rem;">
+                        <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem;">Lot #{lot_num}</div>
+                        <div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 0.4rem;">{lot_info['title'][:25]}...</div>
+                        <div>
                             <span class="lot-badge {weight_class}">{lot_info['weight']}</span>
-                            <span class="lot-badge" style="background: #e0e0e0; color: #333;">{lot_info['material']}</span>
                         </div>
                     </div>
                     """
                     st.markdown(card_html, unsafe_allow_html=True)
                     
                     if st.button(
-                        "✓ Selected" if is_selected else "Select",
+                        "✓" if is_selected else "+",
                         key=f"lot_{lot_num}",
                         use_container_width=True,
                         type="primary" if is_selected else "secondary"
@@ -412,51 +451,83 @@ with left:
                             st.session_state.selected_lots.append(lot_num)
                         st.rerun()
     
-    st.markdown("---")
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     
-    # AI Packing suggestion
-    suggested_pack, pack_note = suggest_packing_for_lots(st.session_state.selected_lots)
-    with st.expander("💡 AI Packing Recommendation", expanded=False):
-        st.info(pack_note)
+    # Compact options in two columns
+    st.markdown("#### ⚙️ Shipping Options")
     
-    packing = st.selectbox("📦 Packing Method", PACKING_TYPES, index=PACKING_TYPES.index(suggested_pack))
-    delivery = st.selectbox("🚚 Delivery Type", DELIVERY_TYPES)
+    col1, col2 = st.columns(2)
     
-    st.markdown("---")
-    st.markdown("### 📍 Delivery Details")
+    with col1:
+        suggested_pack, pack_note = suggest_packing_for_lots(st.session_state.selected_lots)
+        packing = st.selectbox("📦 Packing", PACKING_TYPES, index=PACKING_TYPES.index(suggested_pack))
     
-    # Address input with autocomplete
+    with col2:
+        delivery = st.selectbox("🚚 Delivery", DELIVERY_TYPES)
+    
+    # AI Packing suggestion - compact
+    with st.expander("💡 AI Recommendation"):
+        st.caption(pack_note)
+    
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+    st.markdown("#### 📍 Delivery Details")
+    
+    # Address input with real-time Nominatim autocomplete
     address_input = st.text_input(
         "Delivery Address",
         value=st.session_state.address_input,
-        placeholder="Start typing an address..."
+        placeholder="Start typing (e.g., 'Paris', '10 Downing Street')...",
+        key="address_text_input"
     )
     
-    # Show suggestions if user is typing
-    if address_input and len(address_input) > 2:
-        matching = [addr for addr in SAMPLE_ADDRESSES if address_input.lower() in addr.lower()]
-        if matching:
-            st.markdown("**Suggestions:**")
-            for addr in matching[:5]:
-                if st.button(f"📍 {addr}", key=f"addr_{addr}", use_container_width=True):
+    # Update suggestions when input changes
+    if address_input != st.session_state.address_input:
+        st.session_state.address_input = address_input
+        st.session_state.show_suggestions = True
+        
+        if len(address_input) >= 3:
+            with st.spinner("🔍 Searching addresses..."):
+                st.session_state.address_suggestions = get_address_suggestions(address_input)
+    
+    # Show Nominatim suggestions
+    if (st.session_state.show_suggestions and 
+        st.session_state.address_suggestions and 
+        len(address_input) >= 3):
+        
+        st.markdown("**Suggestions:**")
+        
+        for idx, addr in enumerate(st.session_state.address_suggestions):
+            col1, col2 = st.columns([5, 1])
+            
+            with col1:
+                st.markdown(f"""
+                <div class="address-suggestion">
+                    📍 {addr}
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                if st.button("✓", key=f"select_addr_{idx}"):
                     st.session_state.address_input = addr
+                    st.session_state.show_suggestions = False
                     st.rerun()
     
-    client_name = st.text_input("👤 Client Name / Reference", placeholder="Optional")
-    
-    st.markdown("---")
-    st.markdown("### 💰 Pricing Options")
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     with col1:
-        currency = st.selectbox("Currency", ["EUR", "USD", "GBP"])
+        client_name = st.text_input("👤 Client Name", placeholder="Optional")
     with col2:
-        admin = st.toggle("Admin View")
+        currency = st.selectbox("💰 Currency", ["EUR", "USD", "GBP"])
     
-    margin = st.slider("Margin (%)", 0, 40, 20) if admin else 0
+    admin = st.toggle("🔧 Admin View")
+    if admin:
+        margin = st.slider("Margin (%)", 0, 40, 20, help="Add profit margin")
+    else:
+        margin = 0
 
 with right:
-    st.markdown("### 📊 Quote Summary")
+    st.markdown("#### 📊 Quote Summary")
     
     if st.session_state.selected_lots and (address_input or st.session_state.address_input):
         final_address = address_input or st.session_state.address_input
@@ -471,30 +542,32 @@ with right:
         client_price = cost * (1 + margin / 100)
         final = client_price * CURRENCY_RATE[currency]
         
-        # Metrics
+        # Compact metrics
         st.markdown(f"""
         <div class="metric-card">
-            <h4 style="margin: 0; opacity: 0.9;">Distance from Paris</h4>
-            <h2 style="margin: 0.5rem 0 0 0;">{km} km</h2>
+            <h4>Distance from Paris</h4>
+            <h2>{km} km</h2>
         </div>
         """, unsafe_allow_html=True)
         
         st.markdown(f"""
         <div class="metric-card">
-            <h4 style="margin: 0; opacity: 0.9;">Total Quote</h4>
-            <h1 style="margin: 0.5rem 0 0 0;">{CURRENCY_SYMBOL[currency]}{final:,.2f}</h1>
+            <h4>Total Quote</h4>
+            <h1 style="font-size: 2rem;">{CURRENCY_SYMBOL[currency]}{final:,.2f}</h1>
         </div>
         """, unsafe_allow_html=True)
         
-        # Selected lots summary
-        st.markdown("**Selected Lots:**")
-        for lot in st.session_state.selected_lots:
-            info = DEMO_LOTS[lot]
-            st.markdown(f"• Lot {lot}: {info['title']} ({info['weight']}, {info['material']})")
+        # Selected lots summary - compact
+        with st.expander(f"📦 Selected Lots ({len(st.session_state.selected_lots)})", expanded=True):
+            for lot in st.session_state.selected_lots:
+                info = DEMO_LOTS[lot]
+                st.markdown(f"**Lot {lot}:** {info['title']}")
+                st.caption(f"{info['weight']} • {info['material']}")
+                st.markdown('<div style="height: 0.3rem;"></div>', unsafe_allow_html=True)
         
-        st.markdown("---")
+        st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
         
-        if st.button("📥 Generate & Download Quote PDF", use_container_width=True, type="primary"):
+        if st.button("📥 Generate PDF Quote", use_container_width=True, type="primary"):
             pdf = generate_branded_pdf(
                 QUOTE_ID,
                 client_name,
@@ -513,12 +586,12 @@ with right:
                 use_container_width=True
             )
     else:
-        st.info("👈 Select artwork lots and enter a delivery address to generate your quote.")
+        st.info("👈 Select lots and enter address to generate quote")
         
-        st.markdown("### Quick Start")
+        st.markdown("**Quick Start:**")
         st.markdown("""
-        1. **Select lots** from the gallery on the left
-        2. **Enter delivery address** (or pick from suggestions)
-        3. **Choose packing & delivery** options
-        4. **Generate your quote** instantly
+        1. Select artwork lots
+        2. Enter delivery address
+        3. Choose options
+        4. Generate quote
         """)
