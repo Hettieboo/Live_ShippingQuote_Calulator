@@ -89,7 +89,7 @@ st.markdown("""
     }
     .stButton>button {
         background: #2d3748;
-        color: white;
+        color: white !important;
         border: none;
         border-radius: 6px;
         padding: 0.5rem 1rem;
@@ -102,7 +102,7 @@ st.markdown("""
     }
     .stButton>button[kind="secondary"] {
         background: white;
-        color: #2d3748;
+        color: #2d3748 !important;
         border: 1px solid #e0e0e0;
     }
     .stButton>button[kind="secondary"]:hover {
@@ -111,7 +111,7 @@ st.markdown("""
     }
     .stButton>button[kind="primary"] {
         background: #2d3748;
-        color: white;
+        color: white !important;
     }
     .stButton>button[kind="primary"]:hover {
         background: #1a202c;
@@ -436,9 +436,9 @@ with left:
                     weight_class = f"badge-{lot_info['weight'].lower()}"
                     
                     card_html = f"""
-                    <div class="lot-card {'lot-card-selected' if is_selected else ''}">
+                    <div class="lot-card {'lot-card-selected' if is_selected else ''}" style="min-height: 95px;">
                         <div style="font-weight: 600; font-size: 0.95rem; margin-bottom: 0.3rem;">Lot #{lot_num}</div>
-                        <div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 0.4rem;">{lot_info['title'][:25]}...</div>
+                        <div style="font-size: 0.8rem; opacity: 0.8; margin-bottom: 0.4rem; min-height: 32px;">{lot_info['title'][:25]}...</div>
                         <div>
                             <span class="lot-badge {weight_class}">{lot_info['weight']}</span>
                         </div>
@@ -446,8 +446,10 @@ with left:
                     """
                     st.markdown(card_html, unsafe_allow_html=True)
                     
+                    # Button with explicit styling
+                    button_label = "✓ Selected" if is_selected else "Select"
                     if st.button(
-                        "✓" if is_selected else "+",
+                        button_label,
                         key=f"lot_{lot_num}",
                         use_container_width=True,
                         type="primary" if is_selected else "secondary"
