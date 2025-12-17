@@ -47,14 +47,15 @@ st.markdown("""
         font-size: 2rem;
     }
     .quote-header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
         border: none;
-        padding: 2rem 2.5rem;
-        border-radius: 12px;
+        padding: 3rem 2.5rem;
+        border-radius: 16px;
         margin-bottom: 2rem;
-        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        box-shadow: 0 20px 60px rgba(30, 58, 138, 0.4);
         position: relative;
         overflow: hidden;
+        text-align: center;
     }
     .quote-header::before {
         content: '';
@@ -63,7 +64,7 @@ st.markdown("""
         right: -50%;
         width: 200%;
         height: 200%;
-        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
         animation: pulse 4s ease-in-out infinite;
     }
     @keyframes pulse {
@@ -77,55 +78,60 @@ st.markdown("""
     .logo-container {
         display: flex;
         align-items: center;
-        gap: 1rem;
-        margin-bottom: 0.8rem;
+        justify-content: center;
+        gap: 1.5rem;
+        margin-bottom: 1rem;
     }
     .logo-icon {
         background: white;
-        width: 60px;
-        height: 60px;
-        border-radius: 12px;
+        width: 90px;
+        height: 90px;
+        border-radius: 20px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 2rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        font-size: 3.5rem;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.3);
         animation: float 3s ease-in-out infinite;
+        border: 4px solid rgba(255,255,255,0.3);
     }
     @keyframes float {
-        0%, 100% { transform: translateY(0px); }
-        50% { transform: translateY(-10px); }
+        0%, 100% { transform: translateY(0px) rotate(0deg); }
+        50% { transform: translateY(-15px) rotate(5deg); }
     }
     .quote-header h1 {
         color: white;
-        font-size: 2.5rem;
+        font-size: 3.5rem;
         margin: 0;
-        font-weight: 700;
-        text-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        letter-spacing: -0.5px;
+        font-weight: 900;
+        text-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        letter-spacing: -1px;
+        line-height: 1;
     }
     .quote-header .tagline {
-        color: rgba(255,255,255,0.9);
-        font-size: 1rem;
-        margin: 0.5rem 0;
-        font-weight: 500;
+        color: rgba(255,255,255,0.95);
+        font-size: 1.3rem;
+        margin: 0.8rem 0;
+        font-weight: 600;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.2);
     }
     .quote-header p {
-        color: rgba(255,255,255,0.85);
-        margin: 0.8rem 0 0 0;
-        font-size: 0.95rem;
-        font-weight: 500;
+        color: rgba(255,255,255,0.9);
+        margin: 1.2rem 0 0 0;
+        font-size: 1.05rem;
+        font-weight: 600;
     }
     .quote-header .badge {
         display: inline-block;
-        background: rgba(255,255,255,0.2);
+        background: rgba(255,255,255,0.25);
         backdrop-filter: blur(10px);
-        padding: 0.4rem 1rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin-right: 0.5rem;
-        border: 1px solid rgba(255,255,255,0.3);
+        padding: 0.6rem 1.5rem;
+        border-radius: 30px;
+        font-size: 1rem;
+        font-weight: 700;
+        margin: 0 0.5rem;
+        border: 2px solid rgba(255,255,255,0.4);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
     .lot-compact-card {
         background: white;
@@ -240,6 +246,32 @@ def get_address_suggestions(query):
         return [r.address for r in results] if results else []
     except:
         return []
+
+def suggest_packing_for_lots(selected_lots):
+    if not selected_lots:
+        return "Automatic (AI)", "ℹ️ Select lots for packing suggestions"
+
+    suggestions = []
+    votes = {}
+
+    for lot in selected_lots:
+        info = DEMO_LOTS.get(lot)
+        if not info:
+            continue
+
+        material = info["material"].lower()
+
+        if any(k in material for k in ["glass", "metal", "steel"]):
+            pack = "Wood crate"
+        elif "photo" in material:
+            pack = "Cardboard box"
+        else:
+            pack = "Automatic (AI)"
+
+        votes[pack] = votes.get(pack, 0) + 1
+
+    overall = max(votes, key=votes.get) if votes else "Automatic (AI)"
+    return overall, f"💡 Recommended: {overall}"
     if not selected_lots:
         return "Automatic (AI)", "ℹ️ Select lots for packing suggestions"
 
