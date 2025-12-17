@@ -196,16 +196,16 @@ geolocator = Nominatim(user_agent="shipquote_pro")
 
 # ================= DEMO LOT DATA =================
 DEMO_LOTS = {
-    86: {"weight": "Heavy", "material": "Canvas", "title": "Abstract Expressionism #3", "artist": "J. Basquiat"},
-    87: {"weight": "Medium", "material": "Canvas", "title": "Landscape Vista", "artist": "M. Rousseau"},
-    88: {"weight": "Medium", "material": "Canvas", "title": "Urban Nocturne", "artist": "K. Tanaka"},
-    89: {"weight": "Heavy", "material": "Glass/Steel", "title": "Reflections III", "artist": "L. Fontana"},
-    90: {"weight": "Heavy", "material": "Metal", "title": "Kinetic Sculpture", "artist": "A. Calder"},
-    91: {"weight": "Medium", "material": "Canvas", "title": "Still Life with Fruit", "artist": "P. Cezanne"},
-    92: {"weight": "Heavy", "material": "Canvas", "title": "The Great Wave", "artist": "K. Hokusai"},
-    93: {"weight": "Light", "material": "Photograph", "title": "Portrait Series #7", "artist": "A. Adams"},
-    94: {"weight": "Light", "material": "Photograph", "title": "Cityscape 2024", "artist": "D. LaChapelle"},
-    95: {"weight": "Medium", "material": "Photograph", "title": "Nature's Symmetry", "artist": "A. Gursky"},
+    86: {"weight": "Heavy", "weight_kg": 45, "material": "Canvas", "title": "Abstract Expressionism #3", "artist": "J. Basquiat"},
+    87: {"weight": "Medium", "weight_kg": 25, "material": "Canvas", "title": "Landscape Vista", "artist": "M. Rousseau"},
+    88: {"weight": "Medium", "weight_kg": 30, "material": "Canvas", "title": "Urban Nocturne", "artist": "K. Tanaka"},
+    89: {"weight": "Heavy", "weight_kg": 85, "material": "Glass/Steel", "title": "Reflections III", "artist": "L. Fontana"},
+    90: {"weight": "Heavy", "weight_kg": 120, "material": "Metal", "title": "Kinetic Sculpture", "artist": "A. Calder"},
+    91: {"weight": "Medium", "weight_kg": 22, "material": "Canvas", "title": "Still Life with Fruit", "artist": "P. Cezanne"},
+    92: {"weight": "Heavy", "weight_kg": 55, "material": "Canvas", "title": "The Great Wave", "artist": "K. Hokusai"},
+    93: {"weight": "Light", "weight_kg": 8, "material": "Photograph", "title": "Portrait Series #7", "artist": "A. Adams"},
+    94: {"weight": "Light", "weight_kg": 5, "material": "Photograph", "title": "Cityscape 2024", "artist": "D. LaChapelle"},
+    95: {"weight": "Medium", "weight_kg": 18, "material": "Photograph", "title": "Nature's Symmetry", "artist": "A. Gursky"},
 }
 
 WEIGHT_MULT = {"Light": 1, "Medium": 1.5, "Heavy": 2}
@@ -320,20 +320,28 @@ def calculate_shipping(lots, packing, delivery, address):
     base = 220
     total = 0
     breakdown = []
+    total_weight = 0
 
     for lot in lots:
         info = DEMO_LOTS[lot]
+        
+        # Weight-based pricing component (€2 per kg)
+        weight_cost = info["weight_kg"] * 2
+        
+        # Calculate price with all factors
         price = (
             base
             * WEIGHT_MULT[info["weight"]]
             * MATERIAL_MULT[info["material"]]
             * dist_mult
         )
-        price += DELIVERY_COST[delivery] + PACKING_COST[packing]
+        price += weight_cost + DELIVERY_COST[delivery] + PACKING_COST[packing]
+        
         total += price
-        breakdown.append([f"Lot {lot}", info["weight"], info["material"], f"{price:,.2f}"])
+        total_weight += info["weight_kg"]
+        breakdown.append([f"Lot {lot}", info["weight"], info["material"], f"{info['weight_kg']} kg", f"{price:,.2f}"])
 
-    return total, breakdown, km
+    return total, breakdown, km, total_weight
 
 def generate_branded_pdf(quote_id, client, address, packing, delivery, breakdown, total, currency):
     buffer = BytesIO()
@@ -372,7 +380,8 @@ def generate_branded_pdf(quote_id, client, address, packing, delivery, breakdown
     elements.append(Spacer(1, 16))
 
     # Breakdown table
-    table = Table([["Lot", "Weight", "Material", "Price (€)"]] + breakdown, colWidths=[3*cm, 3*cm, 5*cm, 3*cm])
+    table = Table([["Lot", "Weight", "Material", "Weight (kg)", "Price (€)"]] + breakdown, 
+                  colWidths=[2.5*cm, 2.5*cm, 3.5*cm, 2.5*cm, 2.5*cm])
     table.setStyle(TableStyle([
         ("BACKGROUND", (0,0), (-1,0), colors.black),
         ("TEXTCOLOR", (0,0), (-1,0), colors.white),
@@ -473,7 +482,7 @@ with left:
             st.markdown(f"""
             <div class="lot-compact-card">
                 <h4>Lot #{lot}: {lot_info['title']}</h4>
-                <p><b>Artist:</b> {lot_info['artist']} • <b>Material:</b> {lot_info['material']} • <span class="{weight_badge}">{lot_info['weight']}</span></p>
+                <p><b>Artist:</b> {lot_info['artist']} • <b>Material:</b> {lot_info['material']} • <b>Weight:</b> {lot_info['weight_kg']} kg • <span class="{weight_badge}">{lot_info['weight']}</span></p>
             </div>
             """, unsafe_allow_html=True)
     
@@ -554,13 +563,20 @@ with right:
     final_address = address_input or st.session_state.address_input
     
     if selected_lots and final_address:
-        shipping, breakdown, km = calculate_shipping(selected_lots, packing, delivery, final_address)
+        shipping, breakdown, km, total_weight = calculate_shipping(selected_lots, packing, delivery, final_address)
         final = shipping * CURRENCY_RATE[currency]
         
         st.markdown(f"""
         <div class="metric-card">
             <h4>🗺️ Distance from Paris</h4>
             <h2>{km:,} km</h2>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <div class="metric-card">
+            <h4>⚖️ Total Weight</h4>
+            <h2>{total_weight:,.1f} kg</h2>
         </div>
         """, unsafe_allow_html=True)
         
@@ -584,13 +600,14 @@ with right:
             for lot in selected_lots:
                 lot_info = DEMO_LOTS[lot]
                 st.markdown(f"**Lot {lot}:** {lot_info['title']}")
-                st.caption(f"{lot_info['weight']} • {lot_info['material']}")
+                st.caption(f"{lot_info['weight']} • {lot_info['material']} • {lot_info['weight_kg']} kg")
             
             st.markdown("---")
             st.markdown(f"""
+            **Total Weight:** {total_weight:.1f} kg (€{total_weight * 2:.2f})  
             **Packing:** {packing} (€{PACKING_COST[packing]})  
             **Delivery:** {delivery} (€{DELIVERY_COST[delivery]})  
-            **Distance:** {km} km
+            **Distance:** {km} km (×{get_distance_and_multiplier(final_address)[1]} multiplier)
             """)
         
         st.markdown("---")
