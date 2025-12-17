@@ -197,6 +197,30 @@ st.markdown("""
     .stButton>button:hover {
         background: #1a202c;
     }
+    .demo-banner {
+        background: linear-gradient(90deg, #fbbf24 0%, #f59e0b 100%);
+        color: #78350f;
+        padding: 0.6rem 1rem;
+        border-radius: 8px;
+        text-align: center;
+        margin-bottom: 1rem;
+        font-weight: 600;
+        font-size: 0.9rem;
+        border: 2px solid #f59e0b;
+    }
+    .footer {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 1rem;
+        text-align: center;
+        margin-top: 2rem;
+        font-size: 0.85rem;
+        color: #718096;
+    }
+    .footer strong {
+        color: #2d3748;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -466,6 +490,13 @@ if "show_suggestions" not in st.session_state:
 
 QUOTE_ID = st.session_state.quote_id
 
+# Demo banner
+st.markdown("""
+<div class="demo-banner">
+    ⚠️ DEMO VERSION - For demonstration purposes only
+</div>
+""", unsafe_allow_html=True)
+
 # Header
 st.markdown(f"""
 <div class="quote-header">
@@ -713,3 +744,12 @@ with right:
         3. **Enter** client name & address
         4. **Generate** PDF receipt
         """)
+
+# Footer
+st.markdown("---")
+st.markdown("""
+<div class="footer">
+    <strong>ShipQuote Pro</strong> © 2024 Henrietta Atsenokhai. All Rights Reserved.<br>
+    Demo application for shipping quote calculations. Not for commercial use without permission.
+</div>
+""", unsafe_allow_html=True)
