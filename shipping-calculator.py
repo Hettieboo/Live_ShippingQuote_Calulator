@@ -320,10 +320,18 @@ with left:
     lot_options = [f"Lot {num} - {info['title']} ({info['artist']})" 
                    for num, info in DEMO_LOTS.items()]
     
+    # Convert stored lot numbers to display strings for default
+    default_displays = []
+    if st.session_state.selected_lots:
+        for lot_num in st.session_state.selected_lots:
+            if lot_num in DEMO_LOTS:
+                info = DEMO_LOTS[lot_num]
+                default_displays.append(f"Lot {lot_num} - {info['title']} ({info['artist']})")
+    
     selected_displays = st.multiselect(
         "Choose up to 5 lots:",
         lot_options,
-        default=st.session_state.selected_lots if st.session_state.selected_lots else [],
+        default=default_displays,
         max_selections=5,
         key="lot_multiselect"
     )
