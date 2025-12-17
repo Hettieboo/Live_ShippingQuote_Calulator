@@ -26,25 +26,36 @@ st.markdown("""
         background: white;
         border: 1px solid #e0e0e0;
         border-radius: 8px;
-        padding: 1rem;
+        padding: 0.7rem;
         text-align: center;
-        margin: 0.5rem 0;
+        margin: 0.4rem 0;
     }
     .metric-card h4 {
         color: #718096;
-        font-size: 0.85rem;
+        font-size: 0.75rem;
         margin: 0;
         font-weight: 500;
     }
     .metric-card h2 {
         color: #2d3748;
-        margin: 0.3rem 0 0 0;
-        font-size: 1.5rem;
+        margin: 0.2rem 0 0 0;
+        font-size: 1.1rem;
     }
     .metric-card h1 {
         color: #2d3748;
-        margin: 0.3rem 0 0 0;
-        font-size: 2rem;
+        margin: 0.2rem 0 0 0;
+        font-size: 1.5rem;
+    }
+    .metric-card-highlight {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        border: none;
+        box-shadow: 0 4px 15px rgba(30, 58, 138, 0.3);
+    }
+    .metric-card-highlight h4 {
+        color: rgba(255,255,255,0.9);
+    }
+    .metric-card-highlight h1, .metric-card-highlight h2 {
+        color: white;
     }
     .quote-header {
         background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #06b6d4 100%);
@@ -237,6 +248,9 @@ DELIVERY_TYPES = list(DELIVERY_COST.keys())
 CURRENCY_RATE = {"EUR": 1, "USD": 1.1, "GBP": 0.85}
 CURRENCY_SYMBOL = {"EUR": "€", "USD": "$", "GBP": "£"}
 
+VAT_RATE = 0.20  # 20% VAT
+INSURANCE_RATE = 0.02  # 2% of shipping cost for insurance
+
 # ================= HELPER FUNCTIONS =================
 def get_address_suggestions(query):
     if not query or len(query) < 3:
@@ -315,10 +329,10 @@ def get_distance_and_multiplier(address):
     except:
         return 0, 1
 
-def calculate_shipping(lots, packing, delivery, address):
+def calculate_shipping(lots, packing, delivery, address, include_insurance=True):
     km, dist_mult = get_distance_and_multiplier(address)
     base = 220
-    total = 0
+    subtotal = 0
     breakdown = []
     total_weight = 0
 
@@ -337,13 +351,27 @@ def calculate_shipping(lots, packing, delivery, address):
         )
         price += weight_cost + DELIVERY_COST[delivery] + PACKING_COST[packing]
         
-        total += price
+        subtotal += price
         total_weight += info["weight_kg"]
         breakdown.append([f"Lot {lot}", info["weight"], info["material"], f"{info['weight_kg']} kg", f"{price:,.2f}"])
 
-    return total, breakdown, km, total_weight
+    # Calculate insurance and VAT
+    insurance = subtotal * INSURANCE_RATE if include_insurance else 0
+    subtotal_with_insurance = subtotal + insurance
+    vat = subtotal_with_insurance * VAT_RATE
+    total = subtotal_with_insurance + vat
 
-def generate_branded_pdf(quote_id, client, address, packing, delivery, breakdown, total, currency):
+    return {
+        "subtotal": subtotal,
+        "insurance": insurance,
+        "vat": vat,
+        "total": total,
+        "breakdown": breakdown,
+        "km": km,
+        "total_weight": total_weight
+    }
+
+def generate_branded_pdf(quote_id, client, address, packing, delivery, breakdown, result, currency):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=2*cm, rightMargin=2*cm, topMargin=2*cm, bottomMargin=2*cm)
     styles = getSampleStyleSheet()
@@ -395,8 +423,26 @@ def generate_branded_pdf(quote_id, client, address, packing, delivery, breakdown
     elements.append(table)
     elements.append(Spacer(1, 18))
 
-    # Total
-    elements.append(Paragraph(f"<font size=14><b>Total Quote: {CURRENCY_SYMBOL[currency]}{total:,.2f}</b></font>", styles["Heading1"]))
+    # Cost summary
+    subtotal_converted = result["subtotal"] * CURRENCY_RATE[currency]
+    insurance_converted = result["insurance"] * CURRENCY_RATE[currency]
+    vat_converted = result["vat"] * CURRENCY_RATE[currency]
+    total_converted = result["total"] * CURRENCY_RATE[currency]
+    
+    summary = Table([
+        ["Subtotal", f"{CURRENCY_SYMBOL[currency]}{subtotal_converted:,.2f}"],
+        ["Insurance (2%)", f"{CURRENCY_SYMBOL[currency]}{insurance_converted:,.2f}"],
+        ["VAT (20%)", f"{CURRENCY_SYMBOL[currency]}{vat_converted:,.2f}"],
+        ["<b>Total Quote</b>", f"<b>{CURRENCY_SYMBOL[currency]}{total_converted:,.2f}</b>"],
+    ], colWidths=[10*cm, 4*cm])
+    summary.setStyle(TableStyle([
+        ("ALIGN", (1,0), (1,-1), "RIGHT"),
+        ("FONT", (0,-1), (-1,-1), "Helvetica-Bold"),
+        ("FONTSIZE", (0,-1), (-1,-1), 14),
+        ("TOPPADDING", (0,-1), (-1,-1), 12),
+        ("LINEABOVE", (0,-1), (-1,-1), 2, colors.black),
+    ]))
+    elements.append(summary)
     elements.append(Spacer(1, 12))
 
     # Footer
@@ -556,6 +602,8 @@ with left:
         client_name = st.text_input("👤 Client Name", placeholder="e.g., Henrietta Atsenokhai")
     with col2:
         currency = st.selectbox("💰 Currency", ["EUR", "USD", "GBP"])
+    
+    include_insurance = st.checkbox("🛡️ Include Insurance (2% of shipping cost)", value=True)
 
 with right:
     st.markdown("### 📊 Quote Summary")
@@ -563,35 +611,66 @@ with right:
     final_address = address_input or st.session_state.address_input
     
     if selected_lots and final_address:
-        shipping, breakdown, km, total_weight = calculate_shipping(selected_lots, packing, delivery, final_address)
-        final = shipping * CURRENCY_RATE[currency]
+        result = calculate_shipping(selected_lots, packing, delivery, final_address, include_insurance)
         
+        # Convert to selected currency
+        subtotal = result["subtotal"] * CURRENCY_RATE[currency]
+        insurance = result["insurance"] * CURRENCY_RATE[currency]
+        vat = result["vat"] * CURRENCY_RATE[currency]
+        total = result["total"] * CURRENCY_RATE[currency]
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown(f"""
+            <div class="metric-card">
+                <h4>🗺️ Distance</h4>
+                <h2>{result["km"]:,} km</h2>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div class="metric-card">
+                <h4>📦 Lots</h4>
+                <h2>{len(selected_lots)}</h2>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="metric-card">
+                <h4>⚖️ Weight</h4>
+                <h2>{result["total_weight"]:.1f} kg</h2>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown(f"""
+            <div class="metric-card">
+                <h4>💵 Subtotal</h4>
+                <h2>{CURRENCY_SYMBOL[currency]}{subtotal:,.2f}</h2>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        # Insurance and VAT
         st.markdown(f"""
         <div class="metric-card">
-            <h4>🗺️ Distance from Paris</h4>
-            <h2>{km:,} km</h2>
+            <h4>🛡️ Insurance (2%)</h4>
+            <h2>{CURRENCY_SYMBOL[currency]}{insurance:,.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
         
         st.markdown(f"""
         <div class="metric-card">
-            <h4>⚖️ Total Weight</h4>
-            <h2>{total_weight:,.1f} kg</h2>
+            <h4>📄 VAT (20%)</h4>
+            <h2>{CURRENCY_SYMBOL[currency]}{vat:,.2f}</h2>
         </div>
         """, unsafe_allow_html=True)
         
+        # Total - highlighted
         st.markdown(f"""
-        <div class="metric-card">
-            <h4>💵 Total Shipping Cost</h4>
-            <h1>{CURRENCY_SYMBOL[currency]}{final:,.2f}</h1>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # Selected lots count
-        st.markdown(f"""
-        <div class="metric-card">
-            <h4>📦 Total Lots</h4>
-            <h2>{len(selected_lots)}</h2>
+        <div class="metric-card metric-card-highlight">
+            <h4>💰 TOTAL QUOTE</h4>
+            <h1>{CURRENCY_SYMBOL[currency]}{total:,.2f}</h1>
         </div>
         """, unsafe_allow_html=True)
         
@@ -604,17 +683,18 @@ with right:
             
             st.markdown("---")
             st.markdown(f"""
-            **Total Weight:** {total_weight:.1f} kg (€{total_weight * 2:.2f})  
-            **Packing:** {packing} (€{PACKING_COST[packing]})  
-            **Delivery:** {delivery} (€{DELIVERY_COST[delivery]})  
-            **Distance:** {km} km (×{get_distance_and_multiplier(final_address)[1]} multiplier)
+            **Subtotal:** {CURRENCY_SYMBOL[currency]}{subtotal:,.2f}  
+            **Insurance (2%):** {CURRENCY_SYMBOL[currency]}{insurance:,.2f}  
+            **VAT (20%):** {CURRENCY_SYMBOL[currency]}{vat:,.2f}  
+            **Total Weight:** {result["total_weight"]:.1f} kg  
+            **Distance:** {result["km"]} km
             """)
         
         st.markdown("---")
         
         if st.button("📥 Generate PDF Quote", type="primary"):
             pdf = generate_branded_pdf(QUOTE_ID, client_name, final_address, packing, 
-                                     delivery, breakdown, final, currency)
+                                     delivery, result["breakdown"], result, currency)
             st.download_button(
                 "⬇️ Download PDF Receipt",
                 pdf,
