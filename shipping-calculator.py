@@ -47,22 +47,85 @@ st.markdown("""
         font-size: 2rem;
     }
     .quote-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 2rem 2.5rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        position: relative;
+        overflow: hidden;
+    }
+    .quote-header::before {
+        content: '';
+        position: absolute;
+        top: -50%;
+        right: -50%;
+        width: 200%;
+        height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        animation: pulse 4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { transform: scale(1); opacity: 0.5; }
+        50% { transform: scale(1.1); opacity: 0.8; }
+    }
+    .quote-header-content {
+        position: relative;
+        z-index: 1;
+    }
+    .logo-container {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 0.8rem;
+    }
+    .logo-icon {
         background: white;
-        border: 1px solid #e0e0e0;
-        border-left: 4px solid #2d3748;
-        padding: 1.2rem 1.5rem;
-        border-radius: 8px;
-        margin-bottom: 1.5rem;
+        width: 60px;
+        height: 60px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        animation: float 3s ease-in-out infinite;
+    }
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-10px); }
     }
     .quote-header h1 {
-        color: #2d3748;
-        font-size: 1.8rem;
+        color: white;
+        font-size: 2.5rem;
         margin: 0;
+        font-weight: 700;
+        text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        letter-spacing: -0.5px;
+    }
+    .quote-header .tagline {
+        color: rgba(255,255,255,0.9);
+        font-size: 1rem;
+        margin: 0.5rem 0;
+        font-weight: 500;
     }
     .quote-header p {
-        color: #718096;
-        margin: 0.3rem 0 0 0;
-        font-size: 0.9rem;
+        color: rgba(255,255,255,0.85);
+        margin: 0.8rem 0 0 0;
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+    .quote-header .badge {
+        display: inline-block;
+        background: rgba(255,255,255,0.2);
+        backdrop-filter: blur(10px);
+        padding: 0.4rem 1rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-right: 0.5rem;
+        border: 1px solid rgba(255,255,255,0.3);
     }
     .lot-compact-card {
         background: white;
@@ -169,7 +232,14 @@ CURRENCY_RATE = {"EUR": 1, "USD": 1.1, "GBP": 0.85}
 CURRENCY_SYMBOL = {"EUR": "€", "USD": "$", "GBP": "£"}
 
 # ================= HELPER FUNCTIONS =================
-def suggest_packing_for_lots(selected_lots):
+def get_address_suggestions(query):
+    if not query or len(query) < 3:
+        return []
+    try:
+        results = geolocator.geocode(query, exactly_one=False, limit=5, timeout=3, addressdetails=True)
+        return [r.address for r in results] if results else []
+    except:
+        return []
     if not selected_lots:
         return "Automatic (AI)", "ℹ️ Select lots for packing suggestions"
 
@@ -300,14 +370,31 @@ if "quote_id" not in st.session_state:
     st.session_state.quote_id = f"SQ-{uuid4().hex[:8].upper()}"
 if "selected_lots" not in st.session_state:
     st.session_state.selected_lots = []
+if "address_input" not in st.session_state:
+    st.session_state.address_input = ""
+if "address_suggestions" not in st.session_state:
+    st.session_state.address_suggestions = []
+if "show_suggestions" not in st.session_state:
+    st.session_state.show_suggestions = True
 
 QUOTE_ID = st.session_state.quote_id
 
 # Header
 st.markdown(f"""
 <div class="quote-header">
-    <h1>📦 ShipQuote Pro</h1>
-    <p>Quote ID: <b>{QUOTE_ID}</b> • Valid for {DAYS_LEFT} days</p>
+    <div class="quote-header-content">
+        <div class="logo-container">
+            <div class="logo-icon">📦</div>
+            <div>
+                <h1>ShipQuote Pro</h1>
+                <div class="tagline">Fine Art & High-Value Logistics</div>
+            </div>
+        </div>
+        <p>
+            <span class="badge">Quote: {QUOTE_ID}</span>
+            <span class="badge">Valid: {DAYS_LEFT} days</span>
+        </p>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -384,9 +471,44 @@ with left:
     
     address_input = st.text_input(
         "Delivery Address",
-        placeholder="e.g., 2 avenue de palavas, London, UK",
-        help="Enter full address for accurate quote"
+        value=st.session_state.address_input,
+        placeholder="Start typing (e.g., 'Paris', '10 Downing Street')...",
+        help="Enter full address for accurate quote",
+        key="address_text_input"
     )
+    
+    # Update suggestions when input changes
+    if address_input != st.session_state.address_input:
+        st.session_state.address_input = address_input
+        st.session_state.show_suggestions = True
+        
+        if len(address_input) >= 3:
+            with st.spinner("🔍 Searching addresses..."):
+                st.session_state.address_suggestions = get_address_suggestions(address_input)
+    
+    # Show address suggestions
+    if (st.session_state.show_suggestions and 
+        st.session_state.address_suggestions and 
+        len(address_input) >= 3):
+        
+        st.markdown("**📍 Suggestions:**")
+        
+        for idx, addr in enumerate(st.session_state.address_suggestions):
+            col1, col2 = st.columns([5, 1])
+            
+            with col1:
+                st.markdown(f"""
+                <div style="background: white; border: 1px solid #e0e0e0; border-radius: 6px; 
+                     padding: 0.6rem; margin: 0.3rem 0; cursor: pointer;">
+                    📍 {addr}
+                </div>
+                """, unsafe_allow_html=True)
+            
+            with col2:
+                if st.button("✓", key=f"select_addr_{idx}"):
+                    st.session_state.address_input = addr
+                    st.session_state.show_suggestions = False
+                    st.rerun()
     
     col1, col2 = st.columns(2)
     with col1:
@@ -397,8 +519,10 @@ with left:
 with right:
     st.markdown("### 📊 Quote Summary")
     
-    if selected_lots and address_input:
-        shipping, breakdown, km = calculate_shipping(selected_lots, packing, delivery, address_input)
+    final_address = address_input or st.session_state.address_input
+    
+    if selected_lots and final_address:
+        shipping, breakdown, km = calculate_shipping(selected_lots, packing, delivery, final_address)
         final = shipping * CURRENCY_RATE[currency]
         
         st.markdown(f"""
@@ -440,7 +564,7 @@ with right:
         st.markdown("---")
         
         if st.button("📥 Generate PDF Quote", type="primary"):
-            pdf = generate_branded_pdf(QUOTE_ID, client_name, address_input, packing, 
+            pdf = generate_branded_pdf(QUOTE_ID, client_name, final_address, packing, 
                                      delivery, breakdown, final, currency)
             st.download_button(
                 "⬇️ Download PDF Receipt",
